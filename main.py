@@ -89,7 +89,31 @@ def fetch_full_schedule(room_id):
 
         current += timedelta(days=7)
 
-    return sorted(lessons, key=lambda x: (x["date"], x["start"]))
+    return sorted(merge_lessons(lessons), key=lambda x: (x["date"], x["start"]))
+
+
+def merge_lessons(lessons):
+    merged = {}
+
+    for lesson in lessons:
+        key = (
+            lesson["room_id"],
+            lesson["date"],
+            lesson["start"],
+            lesson["end"],
+            lesson["subject"]
+        )
+
+        if key not in merged:
+            merged[key] = lesson.copy()
+            merged[key]["groups"] = lesson["groups"] or []
+        else:
+            existing_ids = {g["id"] for g in merged[key]["groups"]}
+            for group in (lesson["groups"] or []):
+                if group["id"] not in existing_ids:
+                    merged[key]["groups"].append(group)
+
+    return list(merged.values())
 
 
 def get_file_path(room_id):
@@ -128,7 +152,7 @@ def format_changes(room_name, added, removed):
     Returns a string or None if there are no changes.
     """
     if not added and not removed:
-        return None  # ничего не отправляем, если изменений нет
+        return None  # Don't send anything if there are no changes.
 
     lines = [f"⚠ Изменения в {room_name}"]
 
