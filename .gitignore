@@ -1,0 +1,15 @@
+# IDE
+.idea/
+
+# Секреты
+tg_credentials.py
+
+# Питон
+__pycache__/
+*.pyc
+*.pyo
+
+# Данные и логи (не нужны в репо)
+data/
+logs/
+changes.log
