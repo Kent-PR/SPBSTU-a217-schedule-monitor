@@ -10,7 +10,7 @@ def send_telegram(text: str):
     payload = {
         "chat_id": TG_CHAT_ID,
         "text": text,
-        "parse_mode": "HTML"  # можно убрать, если не нужен форматированный текст
+        "parse_mode": "HTML"  # You can remove it if you don't need formatted text.
     }
 
     try:

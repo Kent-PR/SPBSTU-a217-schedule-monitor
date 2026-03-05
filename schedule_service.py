@@ -5,7 +5,7 @@ import servicemanager
 import time
 import logging
 
-from main import run_check  # твоя функция проверки расписания
+from main import run_check  # schedule check function
 
 class ScheduleService(win32serviceutil.ServiceFramework):
     _svc_name_ = "ScheduleMonitorService"
@@ -28,20 +28,20 @@ class ScheduleService(win32serviceutil.ServiceFramework):
         logging.info("Service starting...")
         self.ReportServiceStatus(win32service.SERVICE_START_PENDING)
 
-        # ⚡ сервис готов и работает
+        # the service is ready and working
         self.ReportServiceStatus(win32service.SERVICE_RUNNING)
         servicemanager.LogInfoMsg(f"{self._svc_name_} successfully started")
         logging.info("Service started")
 
-        # основной цикл прямо здесь
+        # the main loop is right here
         while self.running:
             try:
-                run_check()  # твоя проверка расписаний
+                run_check()  # checking schedules
             except Exception:
                 logging.exception("Error in service loop")
 
-            # проверка каждые 10 минут
-            for _ in range(600):
+            # check every 5 minutes
+            for _ in range(300):
                 if not self.running:
                     break
                 time.sleep(1)

@@ -9,7 +9,7 @@ from telegram_notifier import send_telegram
 
 BASE_DIR = Path(__file__).resolve().parent
 
-# ================= НАСТРОЙКИ =================
+# ================= SETUP =================
 
 BUILDING_ID = 69
 ROOMS = {
@@ -23,7 +23,7 @@ END_DATE = datetime(2026, 8, 30)
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
-# ================ ЛОГИРОВАНИЕ =================
+# ================ LOGGING =================
 
 LOG_DIR = BASE_DIR / "logs"
 LOG_DIR.mkdir(exist_ok=True)
@@ -124,8 +124,8 @@ def compare_schedules(old, new):
 
 def format_changes(room_name, added, removed):
     """
-    Формирует текстовое сообщение об изменениях для одной аудитории.
-    Возвращает строку или None, если изменений нет.
+    Generates a text message about changes for a single classroom.
+    Returns a string or None if there are no changes.
     """
     if not added and not removed:
         return None  # ничего не отправляем, если изменений нет
@@ -174,7 +174,7 @@ def run_check():
 
     logging.info("Schedule check ended")
 
-    # если есть изменения, отправляем одно сообщение в Telegram
+    # If there are any changes, send one message to Telegram
     if messages:
         full_text = "\n\n".join(messages)
         with open("changes.log", "a", encoding="utf-8") as f:
