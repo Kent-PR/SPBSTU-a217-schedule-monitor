@@ -5,7 +5,9 @@ import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from datetime import datetime, timedelta
+
 from telegram_notifier import send_telegram
+from formatter import format_changes
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -35,7 +37,7 @@ logger.setLevel(logging.INFO)
 
 handler = RotatingFileHandler(
     LOG_DIR / "schedule_service.log",
-    maxBytes=5 * 1024 * 1024,
+    maxBytes=5 * 1024 * 1024, # 5Mb
     backupCount=3,
     encoding="utf-8"
 )
@@ -145,33 +147,10 @@ def compare_schedules(old, new):
 
     return [json.loads(x) for x in added], [json.loads(x) for x in removed]
 
-
-def format_changes(room_name, added, removed):
-    """
-    Generates a text message about changes for a single classroom.
-    Returns a string or None if there are no changes.
-    """
-    if not added and not removed:
-        return None  # Don't send anything if there are no changes.
-
-    lines = [f"⚠ Изменения в {room_name}"]
-
-    if added:
-        lines.append("➕ Добавлено:")
-        for item in added:
-            lines.append(f"  {item['date']} {item['start']} {item['subject']}")
-
-    if removed:
-        lines.append("➖ Удалено:")
-        for item in removed:
-            lines.append(f"  {item['date']} {item['start']} {item['subject']}")
-
-    return "\n".join(lines)
-
-
 def run_check():
     messages = []
 
+    logging.info("=" * 50)
     logging.info("Schedule check started")
 
     for room_id, room_name in ROOMS.items():
@@ -187,16 +166,14 @@ def run_check():
         added, removed = compare_schedules(old_schedule, new_schedule)
 
         if added or removed:
-            logging.info(f"{room_name}: changes detected")
+            logging.info("\t⚠Changes detected⚠")
             msg = format_changes(room_name, added, removed)
             if msg:
                 messages.append(msg)
         else:
-            logging.info(f"{room_name}: no changes detected")
+            logging.info("\tNo changes detected")
 
         save_schedule(room_id, new_schedule)
-
-    logging.info("Schedule check ended")
 
     # If there are any changes, send one message to Telegram
     if messages:
@@ -205,6 +182,7 @@ def run_check():
             f.write(full_text + "\n\n")
         send_telegram(full_text)
 
+    logging.info("Schedule check ended")
 
 def main():
     run_check()

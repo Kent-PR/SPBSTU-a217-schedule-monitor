@@ -1,5 +1,5 @@
 import requests
-import os
+import logging
 
 from tg_credentials import TG_TOKEN, TG_CHAT_ID
 
@@ -10,11 +10,12 @@ def send_telegram(text: str):
     payload = {
         "chat_id": TG_CHAT_ID,
         "text": text,
-        "parse_mode": "HTML"  # You can remove it if you don't need formatted text.
+        "parse_mode": "HTML"
     }
 
     try:
         response = requests.post(API_URL, json=payload, timeout=10)
         response.raise_for_status()
+        logging.info("Telegram notification sent successfully")
     except requests.RequestException as e:
-        print("Ошибка отправки в Telegram:", e)
+        logging.error(f"Telegram notification failed: {e}")
