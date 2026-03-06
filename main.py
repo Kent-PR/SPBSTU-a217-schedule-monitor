@@ -37,7 +37,7 @@ logger.setLevel(logging.INFO)
 
 handler = RotatingFileHandler(
     LOG_DIR / "schedule_service.log",
-    maxBytes=5 * 1024 * 1024, # 5Mb
+    maxBytes=5 * 1024 * 1024,  # 5Mb
     backupCount=3,
     encoding="utf-8"
 )
@@ -170,8 +170,10 @@ def compare_schedules(old, new):
 
     return added, removed
 
+
 def run_check():
     messages = []
+    today = datetime.now().date()
 
     logging.info("=" * 50)
     logging.info("Schedule check started")
@@ -187,6 +189,8 @@ def run_check():
 
         old_schedule = load_old_schedule(room_id)
         added, removed = compare_schedules(old_schedule, new_schedule)
+        added = [i for i in added if datetime.strptime(i["date"], "%Y-%m-%d").date() >= today]
+        removed = [i for i in removed if datetime.strptime(i["date"], "%Y-%m-%d").date() >= today]
 
         if added or removed:
             logging.info("\t⚠Changes detected⚠")
@@ -201,15 +205,15 @@ def run_check():
     # If there are any changes, send one message to Telegram
     if messages:
         full_text = "\n\n".join(messages)
-        with open("changes.log", "a", encoding="utf-8") as f:
+        with open(LOG_DIR / "changes.log", "a", encoding="utf-8") as f:
             f.write(full_text + "\n\n")
         send_telegram(full_text)
 
     logging.info("Schedule check ended")
 
+
 def main():
     run_check()
-
 
 
 if __name__ == "__main__":
