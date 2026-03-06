@@ -12,4 +12,4 @@ __pycache__/
 # Данные и логи (не нужны в репо)
 data/
 logs/
-changes.log
+logs/changes.log
