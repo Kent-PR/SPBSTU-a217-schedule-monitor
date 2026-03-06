@@ -79,13 +79,24 @@ def fetch_full_schedule(room_id):
 
         for day in data.get("days", []):
             for lesson in day.get("lessons", []):
+                teachers = lesson.get("teachers", [])
+                if teachers:
+                    t = teachers[0]
+                    teacher = {
+                        "first_name": t.get("first_name"),
+                        "middle_name": t.get("middle_name"),
+                        "last_name": t.get("last_name")
+                    }
+                else:
+                    teacher = None
+
                 lessons.append({
                     "room_id": room_id,
                     "date": day["date"],
                     "start": lesson.get("time_start"),
                     "end": lesson.get("time_end"),
                     "subject": lesson.get("subject"),
-                    "teacher": lesson.get("teacher"),
+                    "teacher": teacher,
                     "groups": lesson.get("groups")
                 })
 
