@@ -139,13 +139,25 @@ def save_schedule(room_id, data):
 
 
 def compare_schedules(old, new):
-    old_set = {json.dumps(i, sort_keys=True) for i in old}
-    new_set = {json.dumps(i, sort_keys=True) for i in new}
+    def key(lesson):
+        return (
+            lesson["room_id"],
+            lesson["date"],
+            lesson["start"],
+            lesson["end"],
+            lesson["subject"]
+        )
 
-    added = new_set - old_set
-    removed = old_set - new_set
+    old_keys = {key(i) for i in old}
+    new_keys = {key(i) for i in new}
 
-    return [json.loads(x) for x in added], [json.loads(x) for x in removed]
+    added_keys = new_keys - old_keys
+    removed_keys = old_keys - new_keys
+
+    added = [i for i in new if key(i) in added_keys]
+    removed = [i for i in old if key(i) in removed_keys]
+
+    return added, removed
 
 def run_check():
     messages = []
