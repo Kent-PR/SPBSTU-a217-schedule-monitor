@@ -7,6 +7,7 @@ import logging
 
 from main import run_check  # schedule check function
 
+
 class ScheduleService(win32serviceutil.ServiceFramework):
     _svc_name_ = "ScheduleMonitorService"
     _svc_display_name_ = "Schedule Monitor Service"
