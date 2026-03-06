@@ -7,7 +7,8 @@ from pathlib import Path
 from datetime import datetime, timedelta
 
 from telegram_notifier import send_telegram
-from formatter import format_changes
+from formatter import format_changes, format_conflicts
+from conflict_checker import find_conflicts
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -173,6 +174,7 @@ def compare_schedules(old, new):
 
 def run_check():
     messages = []
+    conflict_messages = []
     today = datetime.now().date()
 
     logging.info("=" * 50)
@@ -200,14 +202,28 @@ def run_check():
         else:
             logging.info("\tNo changes detected")
 
+        conflicts = find_conflicts(new_schedule)
+        if conflicts:
+            logging.warning(f"\t⚠Conflicts found: {len(conflicts)}")
+            conflict_msg = format_conflicts(room_name, conflicts)
+            if conflict_msg:
+                conflict_messages.append(conflict_msg)
+
         save_schedule(room_id, new_schedule)
 
     # If there are any changes, send one message to Telegram
     if messages:
-        full_text = "\n\n".join(messages)
+        changes_text_full = "\n\n".join(messages)
         with open(LOG_DIR / "changes.log", "a", encoding="utf-8") as f:
-            f.write(full_text + "\n\n")
-        send_telegram(full_text)
+            f.write(changes_text_full + "\n\n")
+        send_telegram(changes_text_full)
+
+        # If there are any conflicts, send second message to Telegram
+        if conflict_messages:
+            conflict_text_full = "\n\n".join(conflict_messages)
+            with open(LOG_DIR / "conflicts.log", "a", encoding="utf-8") as f:
+                f.write(conflict_text_full + "\n\n")
+            send_telegram(conflict_text_full)
 
     logging.info("Schedule check ended")
 

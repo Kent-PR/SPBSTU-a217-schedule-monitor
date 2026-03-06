@@ -43,3 +43,17 @@ def format_changes(room_name, added, removed):
             lines.append("")
 
     return "\n".join(lines)
+
+
+def format_conflicts(room_name, conflicts):
+    if not conflicts:
+        return None
+
+    lines = [f"⚠️ Конфликты в {room_name}"]
+
+    for a, b in conflicts:
+        lines.append("")
+        lines.append(f"📅 {a['date']}")
+        lines.append(f"🕐 {a['start']}")
+
+    return "\n".join(lines)
