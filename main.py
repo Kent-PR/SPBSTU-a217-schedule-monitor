@@ -6,6 +6,7 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from datetime import datetime, timedelta
 
+from storage import load_current_schedule, save_current_schedule, save_day_schedule, save_changes
 from telegram_notifier import send_telegram
 from formatter import format_changes, format_conflicts
 from conflict_checker import find_conflicts
@@ -137,20 +138,6 @@ def get_file_path(room_id):
     return os.path.join(DATA_DIR, f"{room_id}.json")
 
 
-def load_old_schedule(room_id):
-    path = get_file_path(room_id)
-    if not os.path.exists(path):
-        return []
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-def save_schedule(room_id, data):
-    path = get_file_path(room_id)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
-
-
 def compare_schedules(old, new):
     def key(lesson):
         return (
@@ -173,59 +160,72 @@ def compare_schedules(old, new):
     return added, removed
 
 
-def run_check():
-    messages = []
-    conflict_messages = []
+def run_check(is_summary=False):
+    today = datetime.now().date()
 
     logging.info("=" * 50)
     logging.info("Schedule check started")
 
     for room_id, room_name in ROOMS.items():
-        logging.info(f"{room_name} check")
-
-        try:
-            new_schedule = fetch_full_schedule(room_id)
-        except Exception:
-            logging.error(f"{room_name}: failed to fetch schedule")
-            continue
-
-        old_schedule = load_old_schedule(room_id)
-        added, removed = compare_schedules(old_schedule, new_schedule)
-        added = [i for i in added if datetime.strptime(i["date"], "%Y-%m-%d").date() >= TODAY]
-        removed = [i for i in removed if datetime.strptime(i["date"], "%Y-%m-%d").date() >= TODAY]
-
-        if added or removed:
-            logging.warning("\t⚠Changes detected⚠")
-            msg = format_changes(room_name, added, removed)
-            if msg:
-                messages.append(msg)
+        if is_summary:
+            summary_check(room_id, room_name, today)
         else:
-            logging.info("\tNo changes detected")
-
-        conflicts = find_conflicts(new_schedule)
-        if conflicts:
-            logging.warning(f"\t⚠Conflicts found: {len(conflicts)}")
-            conflict_msg = format_conflicts(room_name, conflicts)
-            if conflict_msg:
-                conflict_messages.append(conflict_msg)
-
-        save_schedule(room_id, new_schedule)
-
-    # If there are any changes, send one message to Telegram
-    if messages:
-        changes_text_full = "\n\n".join(messages)
-        with open(LOG_DIR / "changes.log", "a", encoding="utf-8") as f:
-            f.write(changes_text_full + "\n\n")
-        send_telegram(changes_text_full)
-
-        # If there are any conflicts, send second message to Telegram
-        if conflict_messages:
-            conflict_text_full = "\n\n".join(conflict_messages)
-            with open(LOG_DIR / "conflicts.log", "a", encoding="utf-8") as f:
-                f.write(conflict_text_full + "\n\n")
-            send_telegram(conflict_text_full)
+            instant_check(room_id, room_name, today)
 
     logging.info("Schedule check ended")
+
+
+def instant_check(room_id, room_name, today):
+    logging.info(f"{room_name} instant check")
+
+    try:
+        new_schedule = fetch_full_schedule(room_id)
+    except Exception:
+        logging.error(f"{room_name}: failed to fetch schedule")
+        return
+
+    current = load_current_schedule(room_id)
+    added, removed = compare_schedules(current, new_schedule)
+
+    added = [i for i in added if datetime.strptime(i["date"], "%Y-%m-%d").date() >= today]
+    removed = [i for i in removed if datetime.strptime(i["date"], "%Y-%m-%d").date() >= today]
+
+    if added or removed:
+        logging.warning(f"\t⚠ Changes detected⚠")
+        save_changes(room_id, today.strftime("%Y-%m-%d"), added, removed)
+
+        msg = format_changes(room_name, added, removed)
+        if msg:
+            send_telegram(msg)
+    else:
+        logging.info(f"\tNo changes detected")
+
+
+def summary_check(room_id, room_name, today):
+    logging.info(f"{room_name} summary check")
+
+    try:
+        new_schedule = fetch_full_schedule(room_id)
+    except Exception:
+        logging.error(f"{room_name}: failed to fetch schedule")
+        return
+
+    current = load_current_schedule(room_id)
+    added, removed = compare_schedules(current, new_schedule)
+
+    added = [i for i in added if datetime.strptime(i["date"], "%Y-%m-%d").date() >= today]
+    removed = [i for i in removed if datetime.strptime(i["date"], "%Y-%m-%d").date() >= today]
+
+    if added or removed:
+        logging.warning(f"\t⚠ Changes detected⚠")
+        msg = format_changes(room_name, added, removed)
+        if msg:
+            send_telegram(msg)
+    else:
+        logging.info(f"\tNo changes detected")
+
+    save_current_schedule(room_id, new_schedule)
+    save_day_schedule(room_id, today.strftime("%Y-%m-%d"), new_schedule)
 
 
 def main():
