@@ -1,6 +1,5 @@
 from datetime import datetime
-
-WEEKDAYS_RU = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+from constants import WEEKDAYS_RU
 
 
 def format_date(date_str):

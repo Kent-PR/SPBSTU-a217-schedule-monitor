@@ -22,6 +22,7 @@ ROOMS = {
 
 START_DATE = datetime(2026, 2, 1)
 END_DATE = datetime(2026, 8, 30)
+TODAY = datetime.now().date()
 
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
@@ -175,7 +176,6 @@ def compare_schedules(old, new):
 def run_check():
     messages = []
     conflict_messages = []
-    today = datetime.now().date()
 
     logging.info("=" * 50)
     logging.info("Schedule check started")
@@ -191,11 +191,11 @@ def run_check():
 
         old_schedule = load_old_schedule(room_id)
         added, removed = compare_schedules(old_schedule, new_schedule)
-        added = [i for i in added if datetime.strptime(i["date"], "%Y-%m-%d").date() >= today]
-        removed = [i for i in removed if datetime.strptime(i["date"], "%Y-%m-%d").date() >= today]
+        added = [i for i in added if datetime.strptime(i["date"], "%Y-%m-%d").date() >= TODAY]
+        removed = [i for i in removed if datetime.strptime(i["date"], "%Y-%m-%d").date() >= TODAY]
 
         if added or removed:
-            logging.info("\t⚠Changes detected⚠")
+            logging.warning("\t⚠Changes detected⚠")
             msg = format_changes(room_name, added, removed)
             if msg:
                 messages.append(msg)
