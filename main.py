@@ -5,7 +5,7 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from datetime import datetime, timedelta
 
-from storage import load_current_schedule, save_current_schedule, save_day_schedule, save_changes
+from storage import load_current_schedule, save_current_schedule, save_day_schedule, save_changes, load_day_schedule
 from telegram_notifier import send_telegram
 from formatter import format_changes, format_conflicts
 from conflict_checker import find_conflicts
@@ -183,8 +183,8 @@ def instant_check(room_id, room_name, today):
         logging.error(f"{room_name}: failed to fetch schedule")
         return
 
-    current = load_current_schedule(room_id)
-    added, removed = compare_schedules(current, new_schedule)
+    current_day = load_day_schedule(room_id, today.strftime("%Y-%m-%d"))
+    added, removed = compare_schedules(current_day, new_schedule)
 
     added = [i for i in added if datetime.strptime(i["date"], "%Y-%m-%d").date() >= today]
     removed = [i for i in removed if datetime.strptime(i["date"], "%Y-%m-%d").date() >= today]
@@ -192,6 +192,7 @@ def instant_check(room_id, room_name, today):
     if added or removed:
         logging.warning(f"\t⚠ Changes detected⚠")
         save_changes(room_id, today.strftime("%Y-%m-%d"), added, removed)
+        save_day_schedule(room_id, today.strftime("%Y-%m-%d"), new_schedule)
 
         msg = format_changes(room_name, added, removed)
         if msg:
@@ -225,7 +226,8 @@ def summary_check(room_id, room_name, today):
 
     save_current_schedule(room_id, new_schedule)
 
-    conflicts = find_conflicts(new_schedule)
+    future_schedule = [i for i in new_schedule if datetime.strptime(i["date"], "%Y-%m-%d").date() >= today]
+    conflicts = find_conflicts(future_schedule)
     if conflicts:
         logging.warning(f"\t⚠ Conflicts found: {len(conflicts)}")
         conflict_msg = format_conflicts(room_name, conflicts)

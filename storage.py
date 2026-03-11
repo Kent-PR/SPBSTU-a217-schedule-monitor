@@ -61,3 +61,11 @@ def save_changes(room_id, date, added, removed):
     path = get_changes_path(room_id, date, time_str)
     with open(path, "w", encoding="utf-8") as f:
         json.dump({"added": added, "removed": removed}, f, ensure_ascii=False, indent=4)
+
+
+def load_day_schedule(room_id, date):
+    path = get_day_schedule_path(room_id, date)
+    if not path.exists():
+        return []
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
