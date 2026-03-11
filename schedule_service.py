@@ -5,7 +5,7 @@ import servicemanager
 import time
 import logging
 
-from main import run_check  # schedule check function
+from scheduler import run_scheduler
 
 
 class ScheduleService(win32serviceutil.ServiceFramework):
@@ -37,7 +37,7 @@ class ScheduleService(win32serviceutil.ServiceFramework):
         # the main loop is right here
         while self.running:
             try:
-                run_check()  # checking schedules
+                run_scheduler(lambda: self.running)
             except Exception:
                 logging.exception("Error in service loop")
 

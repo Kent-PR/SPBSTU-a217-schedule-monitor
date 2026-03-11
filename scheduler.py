@@ -12,11 +12,11 @@ def is_summary_time():
     return now in SUMMARY_TIMES
 
 
-def run_scheduler():
+def run_scheduler(running_flag):
     logging.info("Scheduler started")
     summary_done = set()
 
-    while True:
+    while running_flag():
         now = datetime.now()
         time_str = now.strftime("%H:%M")
         date_str = now.strftime("%Y-%m-%d")
@@ -33,4 +33,7 @@ def run_scheduler():
         # чистим старые ключи чтобы set не рос бесконечно
         summary_done = {k for k in summary_done if k.startswith(date_str)}
 
-        time.sleep(CHECK_INTERVAL)
+        for _ in range(CHECK_INTERVAL):
+            if not running_flag():
+                break
+            time.sleep(1)
