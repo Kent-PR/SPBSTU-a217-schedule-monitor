@@ -1,5 +1,4 @@
 import requests
-import json
 import os
 import logging
 from logging.handlers import RotatingFileHandler
@@ -225,6 +224,16 @@ def summary_check(room_id, room_name, today):
         logging.info(f"\tNo changes detected")
 
     save_current_schedule(room_id, new_schedule)
+
+    conflicts = find_conflicts(new_schedule)
+    if conflicts:
+        logging.warning(f"\t⚠ Conflicts found: {len(conflicts)}")
+        conflict_msg = format_conflicts(room_name, conflicts)
+        if conflict_msg:
+            send_telegram(conflict_msg)
+    else:
+        logging.info(f"\tNo conflicts detected")
+
     save_day_schedule(room_id, today.strftime("%Y-%m-%d"), new_schedule)
 
 
