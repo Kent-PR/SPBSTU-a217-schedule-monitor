@@ -2,14 +2,17 @@ import time
 import logging
 from datetime import datetime
 from main import run_check
-
-SUMMARY_TIMES = ["10:00", "17:00"]
-CHECK_INTERVAL = 600  # 10 минут
+from constants import SUMMARY_TIMES, CHECK_INTERVAL
 
 
 def is_summary_time():
-    now = datetime.now().strftime("%H:%M")
-    return now in SUMMARY_TIMES
+    now = datetime.now()
+    for hour, minute in SUMMARY_TIMES:
+        target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        diff = abs((now - target).total_seconds())
+        if diff <= CHECK_INTERVAL / 2:
+            return True
+    return False
 
 
 def run_scheduler(running_flag):
