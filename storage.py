@@ -26,10 +26,6 @@ def get_day_dir(room_id, date):
     return path
 
 
-def get_day_schedule_path(room_id, date):
-    return get_day_dir(room_id, date) / f"{room_id}_schedule.json"
-
-
 def get_changes_path(room_id, date, time):
     changes_dir = get_day_dir(room_id, date) / "changes"
     changes_dir.mkdir(exist_ok=True)
@@ -50,12 +46,6 @@ def save_current_schedule(room_id, data):
         json.dump(data, f, ensure_ascii=False, indent=4)
 
 
-def save_day_schedule(room_id, date, data):
-    path = get_day_schedule_path(room_id, date)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
-
-
 def save_changes(room_id, date, added, removed):
     time_str = datetime.now().strftime("%H_%M_%S")
     path = get_changes_path(room_id, date, time_str)
@@ -63,9 +53,21 @@ def save_changes(room_id, date, added, removed):
         json.dump({"added": added, "removed": removed}, f, ensure_ascii=False, indent=4)
 
 
-def load_day_schedule(room_id, date):
-    path = get_day_schedule_path(room_id, date)
+def get_snapshot_schedule_path(room_id):
+    return get_room_dir(room_id) / f"{room_id}_snapshot_schedule.json"
+
+
+def load_snapshot_schedule(room_id):
+    path = get_snapshot_schedule_path(room_id)
     if not path.exists():
-        return []
+        data = load_current_schedule(room_id)
+        save_snapshot_schedule(room_id, data)
+        return data
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def save_snapshot_schedule(room_id, data):
+    path = get_snapshot_schedule_path(room_id)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)

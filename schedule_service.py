@@ -28,24 +28,14 @@ class ScheduleService(win32serviceutil.ServiceFramework):
     def SvcDoRun(self):
         logging.info("Service starting...")
         self.ReportServiceStatus(win32service.SERVICE_START_PENDING)
-
-        # the service is ready and working
         self.ReportServiceStatus(win32service.SERVICE_RUNNING)
         servicemanager.LogInfoMsg(f"{self._svc_name_} successfully started")
         logging.info("Service started")
 
-        # the main loop is right here
-        while self.running:
-            try:
-                run_scheduler(lambda: self.running)
-            except Exception:
-                logging.exception("Error in service loop")
-
-            # check every 5 minutes
-            for _ in range(300):
-                if not self.running:
-                    break
-                time.sleep(1)
+        try:
+            run_scheduler(lambda: self.running)
+        except Exception:
+            logging.exception("Error in service loop")
 
         logging.info("Service stopped")
         servicemanager.LogInfoMsg(f"{self._svc_name_} stopped")
