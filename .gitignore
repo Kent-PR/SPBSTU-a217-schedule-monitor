@@ -9,6 +9,7 @@ __pycache__/
 *.pyc
 *.pyo
 
-# Данные и логи (не нужны в репо)
+# Данные и логи
 data/
 logs/
+messages_queue/

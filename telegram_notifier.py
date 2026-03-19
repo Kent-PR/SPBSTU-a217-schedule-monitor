@@ -2,6 +2,7 @@ import requests
 import logging
 import time
 from tg_credentials import TG_TOKEN, TG_CHAT_ID
+from storage import load_failed_messages, save_failed_messages
 
 TOKEN = TG_TOKEN
 CHAT_ID = TG_CHAT_ID
@@ -28,3 +29,13 @@ def send_telegram(text: str, retries=3, delay=30):
                 time.sleep(delay)
 
     logging.error("Telegram notification failed after all retries")
+
+
+def send_telegram(text: str, retries=3, delay=30):
+    ...
+    # если все попытки провалились
+    logging.error("Telegram notification failed after all retries")
+    queue = load_failed_messages()
+    queue.append(text)
+    save_failed_messages(queue)
+    logging.info("Message saved to queue")

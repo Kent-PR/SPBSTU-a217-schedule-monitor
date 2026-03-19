@@ -6,6 +6,9 @@ from constants import WEEKDAYS_RU
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 
+MESSAGES_DIR = BASE_DIR / "messages_queue"
+MESSAGES_DIR.mkdir(exist_ok=True)
+
 
 def get_room_dir(room_id):
     path = DATA_DIR / str(room_id)
@@ -71,3 +74,19 @@ def save_snapshot_schedule(room_id, data):
     path = get_snapshot_schedule_path(room_id)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
+
+
+def get_failed_messages_path():
+    return MESSAGES_DIR / "failed_messages.json"
+
+def load_failed_messages():
+    path = get_failed_messages_path()
+    if not path.exists():
+        return []
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def save_failed_messages(messages):
+    path = get_failed_messages_path()
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(messages, f, ensure_ascii=False, indent=4)

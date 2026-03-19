@@ -5,7 +5,7 @@ from pathlib import Path
 from datetime import datetime, timedelta
 
 from storage import load_current_schedule, save_current_schedule, save_changes, load_snapshot_schedule,\
-    save_snapshot_schedule
+    save_snapshot_schedule, load_failed_messages, save_failed_messages
 from telegram_notifier import send_telegram
 from formatter import format_changes, format_conflicts
 from conflict_checker import find_conflicts
@@ -154,6 +154,7 @@ def compare_schedules(old, new):
 
 def run_check(is_summary=False):
     today = datetime.now().date()
+    retry_failed_messages()
 
     logging.info("=" * 50)
     logging.info("Schedule check started")
@@ -190,6 +191,22 @@ def instant_check(room_id, room_name, today):
             send_telegram(msg)
     else:
         logging.info(f"\tNo changes detected")
+
+
+def retry_failed_messages():
+    queue = load_failed_messages()
+    if not queue:
+        return
+
+    still_failed = []
+    for msg in queue:
+        stamped_msg = msg + f"\n\nОтправлено с задержкой: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+        try:
+            send_telegram(msg)
+        except Exception:
+            still_failed.append(msg)
+
+    save_failed_messages(still_failed)
 
 
 def summary_check(room_id, room_name, today):
