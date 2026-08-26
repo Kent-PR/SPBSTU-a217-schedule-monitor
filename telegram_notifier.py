@@ -33,13 +33,3 @@ def send_telegram(text: str, retries=3, delay=30):
     queue.append(text)
     save_failed_messages(queue)
     logging.info("Message saved to queue")
-
-
-def send_telegram(text: str, retries=3, delay=30):
-    ...
-    # если все попытки провалились
-    logging.error("Telegram notification failed after all retries")
-    queue = load_failed_messages()
-    queue.append(text)
-    save_failed_messages(queue)
-    logging.info("Message saved to queue")

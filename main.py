@@ -20,8 +20,8 @@ ROOMS = {
     1949: "Room А.2.17(Mobile)"
 }
 
-START_DATE = datetime(2026, 2, 1)
-END_DATE = datetime(2026, 8, 30)
+START_DATE = datetime(2026, 9, 1)
+END_DATE = datetime(2027, 1, 31)
 
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
@@ -202,7 +202,7 @@ def retry_failed_messages():
     for msg in queue:
         stamped_msg = msg + f"\n\nОтправлено с задержкой: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
         try:
-            send_telegram(msg)
+            send_telegram(stamped_msg)
         except Exception:
             still_failed.append(msg)
 
