@@ -188,7 +188,10 @@ def instant_check(room_id, room_name, today):
         save_changes(room_id, today.strftime("%Y-%m-%d"), added, removed)
         msg = format_changes(room_name, added, removed)
         if msg:
-            send_telegram(msg)
+            if not send_telegram(msg):
+                queue = load_failed_messages()
+                queue.append(msg)
+                save_failed_messages(queue)
     else:
         logging.info(f"\tNo changes detected")
 
@@ -201,9 +204,7 @@ def retry_failed_messages():
     still_failed = []
     for msg in queue:
         stamped_msg = msg + f"\n\nОтправлено с задержкой: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
-        try:
-            send_telegram(stamped_msg)
-        except Exception:
+        if not send_telegram(stamped_msg):
             still_failed.append(msg)
 
     save_failed_messages(still_failed)
@@ -228,7 +229,10 @@ def summary_check(room_id, room_name, today):
         logging.warning(f"\t⚠ Changes detected⚠")
         msg = format_changes(room_name, added, removed)
         if msg:
-            send_telegram(msg)
+            if not send_telegram(msg):
+                queue = load_failed_messages()
+                queue.append(msg)
+                save_failed_messages(queue)
     else:
         logging.info(f"\tNo changes detected")
 
