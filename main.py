@@ -9,19 +9,11 @@ from storage import load_current_schedule, save_current_schedule, save_changes, 
 from telegram_notifier import send_telegram
 from formatter import format_changes, format_conflicts
 from conflict_checker import find_conflicts
+from constants import BUILDING_ID, ROOMS, START_DATE, END_DATE
 
 BASE_DIR = Path(__file__).resolve().parent
 
 # ================= SETUP =================
-
-BUILDING_ID = 69
-ROOMS = {
-    1948: "Room A.2.17(Stationary)",
-    1949: "Room А.2.17(Mobile)"
-}
-
-START_DATE = datetime(2026, 9, 1)
-END_DATE = datetime(2027, 1, 31)
 
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
