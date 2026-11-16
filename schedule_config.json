@@ -15,7 +15,10 @@
     ],
     "google_calendar": {
         "enabled": false,
-        "calendar_id": "primary",
+        "calendars": {
+            "1948": "",
+            "1949": ""
+        },
         "credentials_file": "google_service_account.json",
         "timezone": "Europe/Moscow"
     }
