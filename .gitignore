@@ -3,6 +3,7 @@
 
 # Секреты
 tg_credentials.py
+google_service_account.json
 
 # Питон
 __pycache__/
