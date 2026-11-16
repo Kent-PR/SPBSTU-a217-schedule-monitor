@@ -55,6 +55,7 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0",
     "Accept": "application/json"
 }
+API_TIMEOUT = (5, 20)  # connect timeout, read timeout
 
 # =============================================
 
@@ -66,9 +67,37 @@ def get_api_url(room_id):
 def fetch_week(room_id, date):
     url = get_api_url(room_id)
     params = {"date": date.strftime("%Y-%m-%d")}
-    response = requests.get(url, headers=HEADERS, params=params)
-    response.raise_for_status()
-    return response.json()
+    try:
+        response = requests.get(
+            url,
+            headers=HEADERS,
+            params=params,
+            timeout=API_TIMEOUT,
+        )
+        response.raise_for_status()
+    except requests.RequestException as error:
+        status = error.response.status_code if error.response is not None else None
+        request_url = error.request.url if error.request is not None else url
+        logging.error(
+            "RUZ API request failed: type=%s status=%s url=%s error=%s",
+            type(error).__name__,
+            status if status is not None else "n/a",
+            request_url,
+            error,
+        )
+        raise
+
+    try:
+        return response.json()
+    except ValueError as error:
+        logging.error(
+            "RUZ API returned invalid JSON: type=%s status=%s url=%s error=%s",
+            type(error).__name__,
+            response.status_code,
+            response.url,
+            error,
+        )
+        raise
 
 
 def fetch_full_schedule(room_id):
@@ -173,7 +202,7 @@ def instant_check(room_id, room_name, today):
     try:
         new_schedule = fetch_full_schedule(room_id)
     except Exception:
-        logging.error(f"{room_name}: failed to fetch schedule")
+        logging.exception("%s: failed to fetch schedule", room_name)
         return
 
     snapshot = load_snapshot_schedule(room_id)
@@ -216,7 +245,7 @@ def summary_check(room_id, room_name, today):
     try:
         new_schedule = fetch_full_schedule(room_id)
     except Exception:
-        logging.error(f"{room_name}: failed to fetch schedule")
+        logging.exception("%s: failed to fetch schedule", room_name)
         return
 
     current = load_current_schedule(room_id)
