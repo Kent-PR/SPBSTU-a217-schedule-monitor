@@ -64,6 +64,73 @@ def get_api_url(room_id):
     return f"https://ruz.spbstu.ru/api/v1/ruz/buildings/{BUILDING_ID}/rooms/{room_id}/scheduler"
 
 
+class ScheduleDataError(ValueError):
+    pass
+
+
+def validate_week_data(data):
+    if not isinstance(data, dict):
+        raise ScheduleDataError("response root must be an object")
+
+    days = data.get("days")
+    if not isinstance(days, list):
+        raise ScheduleDataError("response field 'days' must be a list")
+
+    for day_index, day in enumerate(days):
+        if not isinstance(day, dict):
+            raise ScheduleDataError(f"days[{day_index}] must be an object")
+
+        date = day.get("date")
+        if not isinstance(date, str):
+            raise ScheduleDataError(f"days[{day_index}].date must be a string")
+        try:
+            datetime.strptime(date, "%Y-%m-%d")
+        except ValueError as error:
+            raise ScheduleDataError(
+                f"days[{day_index}].date has invalid format: {date!r}"
+            ) from error
+
+        lessons = day.get("lessons")
+        if not isinstance(lessons, list):
+            raise ScheduleDataError(f"days[{day_index}].lessons must be a list")
+
+        for lesson_index, lesson in enumerate(lessons):
+            path = f"days[{day_index}].lessons[{lesson_index}]"
+            if not isinstance(lesson, dict):
+                raise ScheduleDataError(f"{path} must be an object")
+
+            for field in ("time_start", "time_end", "subject"):
+                if not isinstance(lesson.get(field), str) or not lesson[field]:
+                    raise ScheduleDataError(f"{path}.{field} must be a non-empty string")
+
+            for field in ("time_start", "time_end"):
+                try:
+                    datetime.strptime(lesson[field], "%H:%M")
+                except ValueError as error:
+                    raise ScheduleDataError(
+                        f"{path}.{field} has invalid format: {lesson[field]!r}"
+                    ) from error
+
+            for field in ("teachers", "groups"):
+                value = lesson.get(field)
+                if value is not None and not isinstance(value, list):
+                    raise ScheduleDataError(f"{path}.{field} must be a list or null")
+
+            for teacher_index, teacher in enumerate(lesson.get("teachers") or []):
+                if not isinstance(teacher, dict):
+                    raise ScheduleDataError(
+                        f"{path}.teachers[{teacher_index}] must be an object"
+                    )
+
+            for group_index, group in enumerate(lesson.get("groups") or []):
+                if not isinstance(group, dict) or "id" not in group:
+                    raise ScheduleDataError(
+                        f"{path}.groups[{group_index}] must contain an id"
+                    )
+
+    return data
+
+
 def fetch_week(room_id, date):
     url = get_api_url(room_id)
     params = {"date": date.strftime("%Y-%m-%d")}
@@ -88,11 +155,22 @@ def fetch_week(room_id, date):
         raise
 
     try:
-        return response.json()
+        data = response.json()
     except ValueError as error:
         logging.error(
             "RUZ API returned invalid JSON: type=%s status=%s url=%s error=%s",
             type(error).__name__,
+            response.status_code,
+            response.url,
+            error,
+        )
+        raise
+
+    try:
+        return validate_week_data(data)
+    except ScheduleDataError as error:
+        logging.error(
+            "RUZ API returned invalid schedule data: status=%s url=%s error=%s",
             response.status_code,
             response.url,
             error,
@@ -181,6 +259,20 @@ def compare_schedules(old, new):
     return added, removed
 
 
+def is_safe_schedule_update(previous, new, room_id, source_name):
+    if previous and not new:
+        logging.error(
+            "%s for room %s was not updated: API returned an empty schedule "
+            "while the saved schedule contains %s lessons",
+            source_name,
+            room_id,
+            len(previous),
+        )
+        return False
+
+    return True
+
+
 def run_check(is_summary=False):
     today = datetime.now().date()
     retry_failed_messages()
@@ -206,6 +298,9 @@ def instant_check(room_id, room_name, today):
         return
 
     snapshot = load_snapshot_schedule(room_id)
+    if not is_safe_schedule_update(snapshot, new_schedule, room_id, "Snapshot"):
+        return
+
     added, removed = compare_schedules(snapshot, new_schedule)
 
     added = [i for i in added if datetime.strptime(i["date"], "%Y-%m-%d").date() >= today]
@@ -249,6 +344,9 @@ def summary_check(room_id, room_name, today):
         return
 
     current = load_current_schedule(room_id)
+    if not is_safe_schedule_update(current, new_schedule, room_id, "Current schedule"):
+        return
+
     added, removed = compare_schedules(current, new_schedule)
 
     added = [i for i in added if datetime.strptime(i["date"], "%Y-%m-%d").date() >= today]
