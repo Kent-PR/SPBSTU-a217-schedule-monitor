@@ -52,20 +52,25 @@ def _send_chunk(text: str, retries, delay):
 
     for attempt in range(1, retries + 1):
         try:
-            response = requests.post(API_URL, json=payload, timeout=10)
+            response = requests.post(
+                API_URL,
+                json=payload,
+                timeout=10,
+                proxies=PROXIES,
+            )
             response.raise_for_status()
-            logging.info("Telegram notification sent successfully")
+            logging.info("Telegram notification sent successfully via proxy")
             return True
         except requests.RequestException as e:
             if e.response is not None and e.response.status_code == 400:
                 logging.error(
-                    "Telegram rejected the message with HTTP 400; "
+                    "Telegram rejected the message with HTTP 400 via proxy; "
                     "the request will not be retried"
                 )
                 return None
 
             logging.warning(
-                "Telegram attempt %s/%s failed: %s",
+                "Telegram proxy attempt %s/%s failed: %s",
                 attempt,
                 retries,
                 _safe_error(e),
@@ -73,22 +78,22 @@ def _send_chunk(text: str, retries, delay):
             if attempt < retries:
                 time.sleep(delay)
 
-    logging.warning("Direct connection failed, trying via proxy")
+    logging.warning("Telegram proxy failed, trying direct connection")
     try:
-        response = requests.post(API_URL, json=payload, timeout=10, proxies=PROXIES)
+        response = requests.post(API_URL, json=payload, timeout=10)
         response.raise_for_status()
-        logging.info("Telegram notification sent successfully via proxy")
+        logging.info("Telegram notification sent successfully directly")
         return True
     except requests.RequestException as e:
         if e.response is not None and e.response.status_code == 400:
             logging.error(
-                "Telegram rejected the message with HTTP 400 via proxy; "
+                "Telegram rejected the message with HTTP 400 directly; "
                 "the request will not be retried"
             )
             return None
 
         logging.error(
-            "Telegram notification failed via proxy too: %s",
+            "Telegram notification failed directly too: %s",
             _safe_error(e),
         )
         return False
