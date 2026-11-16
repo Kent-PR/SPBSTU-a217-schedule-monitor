@@ -13,9 +13,32 @@ PROXIES = {
 }
 
 API_URL = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+MAX_MESSAGE_LENGTH = 4000
 
 
-def send_telegram(text: str, retries=3, delay=30):
+def split_message(text: str, max_length=MAX_MESSAGE_LENGTH):
+    """Split text into Telegram-safe chunks, preferring line boundaries."""
+    if max_length <= 0:
+        raise ValueError("max_length must be positive")
+
+    chunks = []
+    remaining = text
+
+    while len(remaining) > max_length:
+        newline_at = remaining.rfind("\n", 0, max_length)
+        if newline_at < 0:
+            split_at = max_length
+        else:
+            split_at = newline_at + 1
+
+        chunks.append(remaining[:split_at])
+        remaining = remaining[split_at:]
+
+    chunks.append(remaining)
+    return chunks
+
+
+def _send_chunk(text: str, retries, delay):
     payload = {
         "chat_id": CHAT_ID,
         "text": text,
@@ -42,3 +65,18 @@ def send_telegram(text: str, retries=3, delay=30):
     except requests.RequestException as e:
         logging.error(f"Telegram notification failed via proxy too: {e}")
         return False
+
+
+def send_telegram(text: str, retries=3, delay=30):
+    chunks = split_message(text)
+
+    for index, chunk in enumerate(chunks, start=1):
+        if not _send_chunk(chunk, retries, delay):
+            logging.error(
+                "Telegram notification part %s/%s failed",
+                index,
+                len(chunks),
+            )
+            return False
+
+    return True
