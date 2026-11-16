@@ -12,5 +12,11 @@
     "summary_times": [
         "10:00",
         "17:00"
-    ]
+    ],
+    "google_calendar": {
+        "enabled": false,
+        "calendar_id": "primary",
+        "credentials_file": "google_service_account.json",
+        "timezone": "Europe/Moscow"
+    }
 }
