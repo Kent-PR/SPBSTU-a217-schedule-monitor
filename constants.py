@@ -72,7 +72,45 @@ def _load_config():
         if time_tuple not in summary_times:
             summary_times.append(time_tuple)
 
-    return building_id, rooms, start_date, end_date, check_interval, summary_times
+    google_calendar = config.get("google_calendar", {})
+    if not isinstance(google_calendar, dict):
+        raise RuntimeError("'google_calendar' must be an object")
+
+    enabled = google_calendar.get("enabled", False)
+    if not isinstance(enabled, bool):
+        raise RuntimeError("'google_calendar.enabled' must be a boolean")
+
+    calendar_id = google_calendar.get("calendar_id", "primary")
+    credentials_file = google_calendar.get(
+        "credentials_file", "google_service_account.json"
+    )
+    timezone = google_calendar.get("timezone", "Europe/Moscow")
+    for field_name, value in (
+        ("calendar_id", calendar_id),
+        ("credentials_file", credentials_file),
+        ("timezone", timezone),
+    ):
+        if not isinstance(value, str) or not value.strip():
+            raise RuntimeError(
+                f"'google_calendar.{field_name}' must be a non-empty string"
+            )
+
+    google_calendar_config = {
+        "enabled": enabled,
+        "calendar_id": calendar_id.strip(),
+        "credentials_file": credentials_file.strip(),
+        "timezone": timezone.strip(),
+    }
+
+    return (
+        building_id,
+        rooms,
+        start_date,
+        end_date,
+        check_interval,
+        summary_times,
+        google_calendar_config,
+    )
 
 
 (
@@ -82,4 +120,5 @@ def _load_config():
     END_DATE,
     CHECK_INTERVAL,
     SUMMARY_TIMES,
+    GOOGLE_CALENDAR,
 ) = _load_config()

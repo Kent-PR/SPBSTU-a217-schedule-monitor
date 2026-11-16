@@ -10,6 +10,7 @@ from telegram_notifier import send_telegram
 from formatter import format_changes, format_conflicts
 from conflict_checker import find_conflicts
 from constants import BUILDING_ID, ROOMS, START_DATE, END_DATE
+from google_calendar import sync_schedule as sync_google_calendar
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -292,6 +293,11 @@ def instant_check(room_id, room_name, today):
     snapshot = load_snapshot_schedule(room_id)
     if not is_safe_schedule_update(snapshot, new_schedule, room_id, "Snapshot"):
         return
+
+    try:
+        sync_google_calendar(room_id, room_name, new_schedule)
+    except Exception:
+        logging.exception("%s: Google Calendar synchronization failed", room_name)
 
     added, removed = compare_schedules(snapshot, new_schedule)
 
