@@ -14,6 +14,21 @@ def truncate(text, max_len=40):
     return text if len(text) <= max_len else text[:max_len].rstrip() + "..."
 
 
+def format_teacher(teacher):
+    if not teacher:
+        return "—"
+    if not isinstance(teacher, dict):
+        return str(teacher)
+
+    last_name = teacher.get("last_name") or ""
+    initials = " ".join(
+        f"{name[0]}."
+        for name in (teacher.get("first_name"), teacher.get("middle_name"))
+        if name
+    )
+    return " ".join(part for part in (last_name, initials) if part) or "—"
+
+
 def format_changes(room_name, added, removed):
     """
     Generates a text message about changes for a single classroom.
@@ -51,8 +66,19 @@ def format_conflicts(room_name, conflicts):
     lines = [f"⚠️ Конфликты в {room_name}"]
 
     for a, b in conflicts:
-        lines.append("")
-        lines.append(f"📅 {a['date']}")
-        lines.append(f"🕐 {a['start']}")
+        lines.extend([
+            "",
+            f"📅 {format_date(a['date'])}",
+            "",
+            f"🕐 {a['start']} – {a['end']}",
+            f"📖 {truncate(a['subject'], max_len=80)}",
+            f"👤 {format_teacher(a.get('teacher'))}",
+            "",
+            "↕ пересекается с",
+            "",
+            f"🕐 {b['start']} – {b['end']}",
+            f"📖 {truncate(b['subject'], max_len=80)}",
+            f"👤 {format_teacher(b.get('teacher'))}",
+        ])
 
     return "\n".join(lines)
