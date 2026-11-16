@@ -119,6 +119,19 @@ python schedule_service.py remove  # удалить сервис
 - `requests` — HTTP-запросы к API и Telegram
 - `pywin32` — Windows-сервис
 
+Установка зависимостей приложения:
+
+```bash
+pip install -r requirements.txt
+```
+
+Установка зависимостей для разработки и запуск тестов:
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest
+```
+
 ## 🔔 Примеры уведомлений в Telegram
 
 **Изменение в расписании:**
