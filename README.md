@@ -71,6 +71,44 @@
 
 После изменения конфигурации перезапусти Windows-службу. При запуске сервис проверяет типы значений, формат дат `YYYY-MM-DD`, формат времени `HH:MM` и корректность диапазона семестра.
 
+## 📆 Google Calendar
+
+Сервис может зеркалировать расписание RUZ в Google Calendar. При каждой мгновенной
+проверке он создаёт отсутствующие пары, обновляет изменившиеся и удаляет события,
+которых больше нет в RUZ. Управляются только события, созданные этой интеграцией;
+остальные записи календаря не затрагиваются.
+
+1. В Google Cloud создай проект, включи **Google Calendar API** и создай
+   **Service Account** с JSON-ключом.
+2. Сохрани ключ рядом с проектом как `google_service_account.json`. Файл уже
+   добавлен в `.gitignore` и не должен попадать в Git.
+3. В настройках нужного Google-календаря предоставь e-mail service account право
+   **«Вносить изменения в мероприятия»**.
+4. Узнай идентификатор календаря: **Настройки → Интеграция календаря →
+   Идентификатор календаря**.
+5. Заполни секцию `google_calendar` в `schedule_config.json`:
+
+```json
+"google_calendar": {
+    "enabled": true,
+    "calendar_id": "your_calendar_id@group.calendar.google.com",
+    "credentials_file": "google_service_account.json",
+    "timezone": "Europe/Moscow"
+}
+```
+
+6. Установи зависимости и перезапусти службу:
+
+```bash
+pip install -r requirements.txt
+sc stop ScheduleMonitorService
+sc start ScheduleMonitorService
+```
+
+При первом успешном цикле проверки календарь заполнится расписанием текущего
+семестра. Ошибка Google Calendar записывается в `logs/schedule_service.log`, но не
+останавливает проверки RUZ и Telegram-уведомления.
+
 ## ⚙️ Установка
 
 ### 1. Клонировать репозиторий
