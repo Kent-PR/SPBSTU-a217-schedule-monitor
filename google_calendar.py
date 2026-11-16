@@ -154,7 +154,12 @@ def sync_schedule(room_id, room_name, lessons, service=None, config=None):
     if not config.get("enabled", False):
         return {"created": 0, "updated": 0, "deleted": 0, "disabled": True}
 
-    calendar_id = config["calendar_id"]
+    calendars = config.get("calendars", {})
+    calendar_id = calendars.get(room_id) or calendars.get(str(room_id))
+    if not calendar_id:
+        raise GoogleCalendarConfigError(
+            f"Google calendar id is not configured for room {room_id}"
+        )
     timezone = config["timezone"]
     service = service or _build_service(config["credentials_file"])
 

@@ -38,7 +38,10 @@ class FakeService:
 def enabled_config():
     return {
         "enabled": True,
-        "calendar_id": "calendar@example.com",
+        "calendars": {
+            1948: "calendar-1948@example.com",
+            1949: "calendar-1949@example.com",
+        },
         "credentials_file": "unused-in-tests.json",
         "timezone": "Europe/Moscow",
     }
@@ -71,6 +74,7 @@ def test_sync_creates_missing_lesson(monkeypatch, lesson):
     assert body["summary"] == "Высшая математика"
     assert body["start"]["timeZone"] == "Europe/Moscow"
     assert body["extendedProperties"]["private"]["ruzSource"] == "ruz_hack"
+    assert service.events_api.inserted[0]["calendarId"] == "calendar-1948@example.com"
 
 
 def test_sync_keeps_unchanged_event(monkeypatch, lesson):
@@ -124,3 +128,30 @@ def test_sync_only_uses_lessons_for_requested_room(monkeypatch, lesson):
         config=enabled_config(),
     )
     assert service.events_api.inserted == []
+
+
+def test_each_room_uses_its_own_calendar(monkeypatch, lesson):
+    service = FakeService()
+    monkeypatch.setattr(google_calendar, "_list_managed_events", Mock(return_value=[]))
+
+    google_calendar.sync_schedule(
+        1949,
+        "Room A.2.17 Mobile",
+        [lesson(room_id=1949)],
+        service=service,
+        config=enabled_config(),
+    )
+
+    assert service.events_api.inserted[0]["calendarId"] == "calendar-1949@example.com"
+
+
+def test_enabled_sync_requires_calendar_for_room(lesson):
+    config = enabled_config()
+    config["calendars"].pop(1948)
+
+    try:
+        google_calendar.sync_schedule(1948, "Room", [lesson()], config=config)
+    except google_calendar.GoogleCalendarConfigError as error:
+        assert "room 1948" in str(error)
+    else:
+        raise AssertionError("Missing room calendar must be rejected")
