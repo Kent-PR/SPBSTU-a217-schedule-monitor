@@ -1,6 +1,7 @@
 import requests
 import logging
 import time
+from html import escape
 from tg_credentials import TG_TOKEN, TG_CHAT_ID, TG_PROXY
 from storage import load_failed_messages, save_failed_messages
 
@@ -38,10 +39,14 @@ def split_message(text: str, max_length=MAX_MESSAGE_LENGTH):
     return chunks
 
 
+def _safe_error(error):
+    return str(error).replace(TOKEN, "***")
+
+
 def _send_chunk(text: str, retries, delay):
     payload = {
         "chat_id": CHAT_ID,
-        "text": text,
+        "text": escape(text, quote=False),
         "parse_mode": "HTML"
     }
 
@@ -52,7 +57,19 @@ def _send_chunk(text: str, retries, delay):
             logging.info("Telegram notification sent successfully")
             return True
         except requests.RequestException as e:
-            logging.warning(f"Telegram attempt {attempt}/{retries} failed: {e}")
+            if e.response is not None and e.response.status_code == 400:
+                logging.error(
+                    "Telegram rejected the message with HTTP 400; "
+                    "the request will not be retried"
+                )
+                return None
+
+            logging.warning(
+                "Telegram attempt %s/%s failed: %s",
+                attempt,
+                retries,
+                _safe_error(e),
+            )
             if attempt < retries:
                 time.sleep(delay)
 
@@ -63,7 +80,17 @@ def _send_chunk(text: str, retries, delay):
         logging.info("Telegram notification sent successfully via proxy")
         return True
     except requests.RequestException as e:
-        logging.error(f"Telegram notification failed via proxy too: {e}")
+        if e.response is not None and e.response.status_code == 400:
+            logging.error(
+                "Telegram rejected the message with HTTP 400 via proxy; "
+                "the request will not be retried"
+            )
+            return None
+
+        logging.error(
+            "Telegram notification failed via proxy too: %s",
+            _safe_error(e),
+        )
         return False
 
 
@@ -71,12 +98,13 @@ def send_telegram(text: str, retries=3, delay=30):
     chunks = split_message(text)
 
     for index, chunk in enumerate(chunks, start=1):
-        if not _send_chunk(chunk, retries, delay):
+        result = _send_chunk(chunk, retries, delay)
+        if result is not True:
             logging.error(
                 "Telegram notification part %s/%s failed",
                 index,
                 len(chunks),
             )
-            return False
+            return result
 
     return True
