@@ -120,7 +120,7 @@ def _load_config():
             )
 
     credentials_file = google_calendar.get(
-        "credentials_file", "google_service_account.json"
+        "credentials_file", "private_config/google_service_account.json"
     )
     timezone = google_calendar.get("timezone", "Europe/Moscow")
     for field_name, value in (

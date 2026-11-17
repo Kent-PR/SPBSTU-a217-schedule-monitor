@@ -9,11 +9,14 @@ import pytest
 os.environ["SCHEDULE_MONITOR_DISABLE_FILE_LOGGING"] = "1"
 
 # Tests never use real Telegram credentials.
-credentials = ModuleType("tg_credentials")
+private_config = ModuleType("private_config")
+private_config.__path__ = []
+credentials = ModuleType("private_config.tg_credentials")
 credentials.TG_TOKEN = "test-token"
 credentials.TG_CHAT_ID = "test-chat"
 credentials.TG_PROXY = "http://127.0.0.1:10808"
-sys.modules["tg_credentials"] = credentials
+sys.modules["private_config"] = private_config
+sys.modules["private_config.tg_credentials"] = credentials
 
 
 @pytest.fixture

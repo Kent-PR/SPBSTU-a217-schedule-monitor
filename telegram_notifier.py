@@ -3,7 +3,7 @@ import logging
 import time
 from dataclasses import dataclass
 from html import escape
-from tg_credentials import TG_TOKEN, TG_CHAT_ID, TG_PROXY
+from private_config.tg_credentials import TG_TOKEN, TG_CHAT_ID, TG_PROXY
 
 TOKEN = TG_TOKEN
 CHAT_ID = TG_CHAT_ID

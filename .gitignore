@@ -2,8 +2,7 @@
 .idea/
 
 # Секреты
-tg_credentials.py
-google_service_account.json
+private_config/
 
 # Питон
 __pycache__/

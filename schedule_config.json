@@ -20,7 +20,7 @@
             "1948": "cknggn08jahp525v2mhiod2fa8@group.calendar.google.com",
             "1949": "litp18bs4bt7eif6j9pubrj2o0@group.calendar.google.com"
         },
-        "credentials_file": "google_service_account.json",
+        "credentials_file": "private_config/google_service_account.json",
         "timezone": "Europe/Moscow"
     }
 }
