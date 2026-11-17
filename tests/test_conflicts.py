@@ -1,3 +1,7 @@
+from datetime import date
+from unittest.mock import Mock
+
+import main
 from conflict_checker import find_conflicts, has_overlap
 from formatter import format_conflicts, format_teacher
 
@@ -50,4 +54,23 @@ def test_conflict_message_contains_both_lessons(lesson):
 
 def test_teacher_formatting_without_teacher():
     assert format_teacher(None) == "—"
+
+
+def test_unresolved_conflict_is_sent_in_every_summary(monkeypatch, lesson):
+    first = lesson(subject="Mathematics", start="10:00", end="11:40")
+    second = lesson(subject="Physics", start="11:00", end="12:40")
+    schedule = [first, second]
+    send = Mock(return_value=True)
+
+    monkeypatch.setattr(main, "fetch_full_schedule", Mock(return_value=schedule))
+    monkeypatch.setattr(main, "load_current_schedule", Mock(return_value=schedule))
+    monkeypatch.setattr(main, "save_current_schedule", Mock())
+    monkeypatch.setattr(main, "save_snapshot_schedule", Mock())
+    monkeypatch.setattr(main, "send_or_queue", send)
+
+    main.summary_check(1948, "Room A.2.17", date(2026, 11, 16))
+    main.summary_check(1948, "Room A.2.17", date(2026, 11, 16))
+
+    assert send.call_count == 2
+    assert send.call_args_list[0] == send.call_args_list[1]
 
