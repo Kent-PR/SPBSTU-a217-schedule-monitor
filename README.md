@@ -54,7 +54,9 @@ Windows-службы. Тестовое сообщение в Telegram не от�
 ├── telegram_notifier.py    # Отправка уведомлений в Telegram (с фолбэком через прокси)
 ├── constants.py            # Константы
 ├── schedule_config.json    # Аудитории, семестр и расписание проверок
-├── tg_credentials.py       # Токен, chat_id и прокси (не в репо)
+├── private_config/         # Telegram и Google credentials (не в репо)
+│   ├── tg_credentials.py
+│   └── google_service_account.json
 ├── data/                   # Расписания и изменения (не в репо)
 │   └── 1948/
 │       ├── 1948_current_schedule.json
@@ -100,8 +102,8 @@ Windows-службы. Тестовое сообщение в Telegram не от�
 
 1. В Google Cloud создай проект, включи **Google Calendar API** и создай
    **Service Account** с JSON-ключом.
-2. Сохрани ключ рядом с проектом как `google_service_account.json`. Файл уже
-   добавлен в `.gitignore` и не должен попадать в Git.
+2. Сохрани ключ как `private_config/google_service_account.json`. Каталог
+   `private_config` уже добавлен в `.gitignore` и не должен попадать в Git.
 3. В настройках обоих Google-календарей предоставь e-mail service account право
    **«Просматривать все сведения о мероприятиях»**.
 4. Для каждого календаря узнай идентификатор: **Настройки → Интеграция
@@ -115,7 +117,7 @@ Windows-службы. Тестовое сообщение в Telegram не от�
         "1948": "calendar_id_for_room_1948@group.calendar.google.com",
         "1949": "calendar_id_for_room_1949@group.calendar.google.com"
     },
-    "credentials_file": "google_service_account.json",
+    "credentials_file": "private_config/google_service_account.json",
     "timezone": "Europe/Moscow"
 }
 ```
@@ -148,7 +150,7 @@ python Scripts/pywin32_postinstall.py -install
 ```
 
 ### 3. Создать файл с кредами
-Создай файл `tg_credentials.py` в корне проекта:
+Создай каталог `private_config`, а в нём файл `tg_credentials.py`:
 ```python
 TG_TOKEN = "твой_токен"
 TG_CHAT_ID = "твой_chat_id"
