@@ -10,6 +10,7 @@ from telegram_notifier import send_telegram
 from formatter import format_changes, format_conflicts
 from conflict_checker import find_conflicts
 from constants import BUILDING_ID, ROOMS, START_DATE, END_DATE
+from normalization import lesson_key, normalize_lesson, normalize_text
 from google_calendar import sync_schedule as sync_google_calendar
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -93,12 +94,15 @@ def validate_week_data(data):
                 raise ScheduleDataError(f"{path} must be an object")
 
             for field in ("time_start", "time_end", "subject"):
-                if not isinstance(lesson.get(field), str) or not lesson[field]:
+                if (
+                    not isinstance(lesson.get(field), str)
+                    or not normalize_text(lesson[field])
+                ):
                     raise ScheduleDataError(f"{path}.{field} must be a non-empty string")
 
             for field in ("time_start", "time_end"):
                 try:
-                    datetime.strptime(lesson[field], "%H:%M")
+                    datetime.strptime(normalize_text(lesson[field]), "%H:%M")
                 except ValueError as error:
                     raise ScheduleDataError(
                         f"{path}.{field} has invalid format: {lesson[field]!r}"
@@ -209,14 +213,9 @@ def fetch_full_schedule(room_id):
 def merge_lessons(lessons):
     merged = {}
 
-    for lesson in lessons:
-        key = (
-            lesson["room_id"],
-            lesson["date"],
-            lesson["start"],
-            lesson["end"],
-            lesson["subject"]
-        )
+    for raw_lesson in lessons:
+        lesson = normalize_lesson(raw_lesson)
+        key = lesson_key(lesson)
 
         if key not in merged:
             merged[key] = lesson.copy()
@@ -231,23 +230,14 @@ def merge_lessons(lessons):
 
 
 def compare_schedules(old, new):
-    def key(lesson):
-        return (
-            lesson["room_id"],
-            lesson["date"],
-            lesson["start"],
-            lesson["end"],
-            lesson["subject"]
-        )
-
-    old_keys = {key(i) for i in old}
-    new_keys = {key(i) for i in new}
+    old_keys = {lesson_key(item) for item in old}
+    new_keys = {lesson_key(item) for item in new}
 
     added_keys = new_keys - old_keys
     removed_keys = old_keys - new_keys
 
-    added = [i for i in new if key(i) in added_keys]
-    removed = [i for i in old if key(i) in removed_keys]
+    added = [item for item in new if lesson_key(item) in added_keys]
+    removed = [item for item in old if lesson_key(item) in removed_keys]
 
     return added, removed
 

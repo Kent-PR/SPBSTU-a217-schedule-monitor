@@ -1,4 +1,5 @@
 from datetime import datetime
+from normalization import subject_key
 
 
 def parse_time(t):
@@ -18,7 +19,7 @@ def find_conflicts(lessons):
                 continue
             if a["date"] != b["date"]:
                 continue
-            if a["subject"] == b["subject"]:
+            if subject_key(a["subject"]) == subject_key(b["subject"]):
                 continue
             if has_overlap(a["start"], a["end"], b["start"], b["end"]):
                 conflicts.append((a, b))
