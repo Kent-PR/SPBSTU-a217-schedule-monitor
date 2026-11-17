@@ -52,3 +52,23 @@ def test_failure_of_first_room_does_not_skip_second_room(monkeypatch):
 
     assert fetch.call_count == 2
 
+
+def test_summary_run_fetches_each_room_only_once(monkeypatch):
+    schedule = []
+    fetch = Mock(return_value=schedule)
+    instant = Mock()
+    summary = Mock()
+    monkeypatch.setattr(main, "ROOMS", {1948: "Room A.2.17"})
+    monkeypatch.setattr(main, "fetch_full_schedule", fetch)
+    monkeypatch.setattr(main, "instant_check", instant)
+    monkeypatch.setattr(main, "summary_check", summary)
+    monkeypatch.setattr(main, "retry_failed_messages", Mock())
+
+    main.run_check(is_summary=True)
+
+    fetch.assert_called_once_with(1948)
+    instant.assert_called_once()
+    summary.assert_called_once()
+    assert instant.call_args.args[3] is schedule
+    assert summary.call_args.args[3] is schedule
+

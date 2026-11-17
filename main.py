@@ -283,21 +283,28 @@ def run_check(is_summary=False):
     logging.info("Schedule check started")
 
     for room_id, room_name in ROOMS.items():
-        instant_check(room_id, room_name, today)
+        try:
+            new_schedule = fetch_full_schedule(room_id)
+        except Exception:
+            logging.exception("%s: failed to fetch schedule", room_name)
+            continue
+
+        instant_check(room_id, room_name, today, new_schedule)
         if is_summary:
-            summary_check(room_id, room_name, today)
+            summary_check(room_id, room_name, today, new_schedule)
 
     logging.info("Schedule check ended")
 
 
-def instant_check(room_id, room_name, today):
+def instant_check(room_id, room_name, today, new_schedule=None):
     logging.info(f"{room_name} instant check")
 
-    try:
-        new_schedule = fetch_full_schedule(room_id)
-    except Exception:
-        logging.exception("%s: failed to fetch schedule", room_name)
-        return
+    if new_schedule is None:
+        try:
+            new_schedule = fetch_full_schedule(room_id)
+        except Exception:
+            logging.exception("%s: failed to fetch schedule", room_name)
+            return
 
     snapshot = load_snapshot_schedule(room_id)
     if not is_safe_schedule_update(snapshot, new_schedule, room_id, "Snapshot"):
@@ -371,14 +378,15 @@ def retry_failed_messages():
     save_failed_messages(still_failed)
 
 
-def summary_check(room_id, room_name, today):
+def summary_check(room_id, room_name, today, new_schedule=None):
     logging.info(f"{room_name} summary check")
 
-    try:
-        new_schedule = fetch_full_schedule(room_id)
-    except Exception:
-        logging.exception("%s: failed to fetch schedule", room_name)
-        return
+    if new_schedule is None:
+        try:
+            new_schedule = fetch_full_schedule(room_id)
+        except Exception:
+            logging.exception("%s: failed to fetch schedule", room_name)
+            return
 
     current = load_current_schedule(room_id)
     if not is_safe_schedule_update(current, new_schedule, room_id, "Current schedule"):
