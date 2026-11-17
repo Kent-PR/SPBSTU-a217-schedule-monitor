@@ -1,7 +1,5 @@
-import hashlib
-import json
 import logging
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -9,93 +7,11 @@ from constants import END_DATE, GOOGLE_CALENDAR, START_DATE
 
 
 BASE_DIR = Path(__file__).resolve().parent
-SCOPES = ["https://www.googleapis.com/auth/calendar"]
-SOURCE_MARKER = "ruz_hack"
+SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
 
 
 class GoogleCalendarConfigError(RuntimeError):
     pass
-
-
-def _lesson_key(lesson):
-    identity = {
-        "room_id": str(lesson["room_id"]),
-        "date": lesson["date"],
-        "start": lesson["start"],
-        "end": lesson["end"],
-        "subject": lesson["subject"],
-    }
-    encoded = json.dumps(
-        identity, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-    ).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
-
-
-def _teacher_name(teacher):
-    if not teacher:
-        return None
-    parts = [
-        teacher.get("first_name"),
-        teacher.get("middle_name"),
-        teacher.get("last_name"),
-    ]
-    return " ".join(part for part in parts if part)
-
-
-def _event_body(lesson, room_name, timezone):
-    teacher = _teacher_name(lesson.get("teacher"))
-    groups = ", ".join(
-        group.get("name", str(group.get("id", "")))
-        for group in (lesson.get("groups") or [])
-        if group.get("name") or group.get("id") is not None
-    )
-    description = ["Расписание RUZ СПбПУ"]
-    if teacher:
-        description.append(f"Преподаватель: {teacher}")
-    if groups:
-        description.append(f"Группы: {groups}")
-
-    lesson_key = _lesson_key(lesson)
-    body = {
-        "summary": lesson["subject"],
-        "location": room_name,
-        "description": "\n".join(description),
-        "start": {
-            "dateTime": f'{lesson["date"]}T{lesson["start"]}:00',
-            "timeZone": timezone,
-        },
-        "end": {
-            "dateTime": f'{lesson["date"]}T{lesson["end"]}:00',
-            "timeZone": timezone,
-        },
-        "extendedProperties": {
-            "private": {
-                "ruzSource": SOURCE_MARKER,
-                "ruzRoomId": str(lesson["room_id"]),
-                "ruzLessonKey": lesson_key,
-            }
-        },
-    }
-    fingerprint_data = json.dumps(
-        body, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-    ).encode("utf-8")
-    body["extendedProperties"]["private"]["ruzFingerprint"] = hashlib.sha256(
-        fingerprint_data
-    ).hexdigest()
-    return body
-
-
-def _calendar_bounds(timezone):
-    try:
-        zone = ZoneInfo(timezone)
-    except ZoneInfoNotFoundError as error:
-        raise GoogleCalendarConfigError(
-            f"Unknown Google Calendar timezone: {timezone!r}"
-        ) from error
-
-    start = datetime.combine(START_DATE.date(), time.min, tzinfo=zone)
-    end = datetime.combine(END_DATE.date() + timedelta(days=1), time.min, tzinfo=zone)
-    return start.isoformat(), end.isoformat()
 
 
 def _build_service(credentials_file):
@@ -121,8 +37,22 @@ def _build_service(credentials_file):
     return build("calendar", "v3", credentials=credentials, cache_discovery=False)
 
 
-def _list_managed_events(service, calendar_id, room_id, timezone):
-    time_min, time_max = _calendar_bounds(timezone)
+def _audit_bounds(timezone, today):
+    try:
+        zone = ZoneInfo(timezone)
+    except ZoneInfoNotFoundError as error:
+        raise GoogleCalendarConfigError(
+            f"Unknown Google Calendar timezone: {timezone!r}"
+        ) from error
+
+    first_day = max(today, START_DATE.date())
+    start = datetime.combine(first_day, time.min, tzinfo=zone)
+    end = datetime.combine(END_DATE.date() + timedelta(days=1), time.min, tzinfo=zone)
+    return start.isoformat(), end.isoformat()
+
+
+def _list_events(service, calendar_id, timezone, today):
+    time_min, time_max = _audit_bounds(timezone, today)
     events = []
     page_token = None
     while True:
@@ -134,26 +64,54 @@ def _list_managed_events(service, calendar_id, room_id, timezone):
                 timeMax=time_max,
                 singleEvents=True,
                 showDeleted=False,
-                privateExtendedProperty=f"ruzSource={SOURCE_MARKER}",
                 pageToken=page_token,
             )
             .execute()
         )
-        for event in response.get("items", []):
-            private = event.get("extendedProperties", {}).get("private", {})
-            if private.get("ruzRoomId") == str(room_id):
-                events.append(event)
+        events.extend(response.get("items", []))
         page_token = response.get("nextPageToken")
         if not page_token:
             return events
 
 
-def sync_schedule(room_id, room_name, lessons, service=None, config=None):
-    """Make managed Google events for one room exactly match the RUZ schedule."""
+def _parse_datetime(value, zone):
+    if not value:
+        return None
+    if value.endswith("Z"):
+        value = value[:-1] + "+00:00"
+    parsed = datetime.fromisoformat(value)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=zone)
+    return parsed.astimezone(zone)
+
+
+def _event_interval(event, timezone):
+    try:
+        zone = ZoneInfo(timezone)
+    except ZoneInfoNotFoundError as error:
+        raise GoogleCalendarConfigError(
+            f"Unknown Google Calendar timezone: {timezone!r}"
+        ) from error
+    start = _parse_datetime(event.get("start", {}).get("dateTime"), zone)
+    end = _parse_datetime(event.get("end", {}).get("dateTime"), zone)
+    if start is None or end is None:
+        return None
+    return start.date().isoformat(), start.strftime("%H:%M"), end.strftime("%H:%M")
+
+
+def find_missing_lessons(
+    room_id,
+    lessons,
+    service=None,
+    config=None,
+    today=None,
+):
+    """Return future RUZ lessons with no exact time slot in the room calendar."""
     config = GOOGLE_CALENDAR if config is None else config
     if not config.get("enabled", False):
-        return {"created": 0, "updated": 0, "deleted": 0, "disabled": True}
+        return []
 
+    today = today or date.today()
     calendars = config.get("calendars", {})
     calendar_id = calendars.get(room_id) or calendars.get(str(room_id))
     if not calendar_id:
@@ -162,55 +120,29 @@ def sync_schedule(room_id, room_name, lessons, service=None, config=None):
         )
     timezone = config["timezone"]
     service = service or _build_service(config["credentials_file"])
-
-    desired = {
-        _lesson_key(lesson): _event_body(lesson, room_name, timezone)
-        for lesson in lessons
-        if str(lesson.get("room_id")) == str(room_id)
+    events = _list_events(service, calendar_id, timezone, today)
+    occupied_intervals = {
+        interval
+        for event in events
+        if (interval := _event_interval(event, timezone)) is not None
     }
-    existing = {}
-    duplicate_ids = []
-    for event in _list_managed_events(
-        service, calendar_id, room_id, timezone
-    ):
-        private = event.get("extendedProperties", {}).get("private", {})
-        key = private.get("ruzLessonKey")
-        if not key or key in existing:
-            duplicate_ids.append(event["id"])
-        else:
-            existing[key] = event
 
-    stats = {"created": 0, "updated": 0, "deleted": 0, "disabled": False}
-    for event_id in duplicate_ids:
-        service.events().delete(calendarId=calendar_id, eventId=event_id).execute()
-        stats["deleted"] += 1
-
-    for key, body in desired.items():
-        event = existing.pop(key, None)
-        if event is None:
-            service.events().insert(calendarId=calendar_id, body=body).execute()
-            stats["created"] += 1
+    missing = []
+    for lesson in lessons:
+        if str(lesson.get("room_id")) != str(room_id):
             continue
+        lesson_date = datetime.strptime(lesson["date"], "%Y-%m-%d").date()
+        if lesson_date < today or lesson_date > END_DATE.date():
+            continue
+        interval = (lesson["date"], lesson["start"], lesson["end"])
+        if interval not in occupied_intervals:
+            missing.append(lesson)
 
-        current_private = event.get("extendedProperties", {}).get("private", {})
-        wanted_private = body["extendedProperties"]["private"]
-        if current_private.get("ruzFingerprint") != wanted_private["ruzFingerprint"]:
-            service.events().update(
-                calendarId=calendar_id, eventId=event["id"], body=body
-            ).execute()
-            stats["updated"] += 1
-
-    for event in existing.values():
-        service.events().delete(
-            calendarId=calendar_id, eventId=event["id"]
-        ).execute()
-        stats["deleted"] += 1
-
+    missing.sort(key=lambda lesson: (lesson["date"], lesson["start"], lesson["end"]))
     logging.info(
-        "Google Calendar synchronized for room %s: created=%s updated=%s deleted=%s",
+        "Google Calendar audit for room %s: calendar_events=%s missing_lessons=%s",
         room_id,
-        stats["created"],
-        stats["updated"],
-        stats["deleted"],
+        len(events),
+        len(missing),
     )
-    return stats
+    return missing
