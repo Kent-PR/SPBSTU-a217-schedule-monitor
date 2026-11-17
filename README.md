@@ -177,6 +177,8 @@ pip install -r requirements-dev.txt
 python -m pytest
 ```
 
+Во время тестов файловое логирование автоматически отключается через `SCHEDULE_MONITOR_DISABLE_FILE_LOGGING=1`, поэтому искусственные ошибки pytest не попадают в рабочий `logs/schedule_service.log`.
+
 ## 🔔 Примеры уведомлений в Telegram
 
 **Изменение в расписании:**
