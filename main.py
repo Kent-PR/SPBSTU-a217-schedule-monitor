@@ -5,13 +5,14 @@ from pathlib import Path
 from datetime import datetime, timedelta
 
 from storage import load_current_schedule, save_current_schedule, save_changes, load_snapshot_schedule,\
-    save_snapshot_schedule, load_failed_messages, save_failed_messages
+    save_snapshot_schedule, load_failed_messages, save_failed_messages, load_calendar_missing,\
+    save_calendar_missing
 from telegram_notifier import send_telegram
-from formatter import format_changes, format_conflicts
+from formatter import format_changes, format_conflicts, format_missing_calendar_dates
 from conflict_checker import find_conflicts
 from constants import BUILDING_ID, ROOMS, START_DATE, END_DATE
 from normalization import lesson_key, normalize_lesson, normalize_text
-from google_calendar import sync_schedule as sync_google_calendar
+from google_calendar import find_missing_lessons
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -284,10 +285,7 @@ def instant_check(room_id, room_name, today):
     if not is_safe_schedule_update(snapshot, new_schedule, room_id, "Snapshot"):
         return
 
-    try:
-        sync_google_calendar(room_id, room_name, new_schedule)
-    except Exception:
-        logging.exception("%s: Google Calendar synchronization failed", room_name)
+    audit_google_calendar(room_id, room_name, new_schedule, today)
 
     added, removed = compare_schedules(snapshot, new_schedule)
 
@@ -306,6 +304,32 @@ def instant_check(room_id, room_name, today):
                 save_failed_messages(queue)
     else:
         logging.info(f"\tNo changes detected")
+
+
+def audit_google_calendar(room_id, room_name, schedule, today):
+    try:
+        missing = find_missing_lessons(room_id, schedule, today=today)
+    except Exception:
+        logging.exception("%s: Google Calendar audit failed", room_name)
+        return
+
+    previous = load_calendar_missing(room_id)
+    previous_dates = {
+        item["date"] if isinstance(item, dict) else str(item)
+        for item in previous
+    }
+    missing_dates = sorted({item["date"] for item in missing})
+    if previous_dates == set(missing_dates):
+        return
+
+    if missing:
+        message = format_missing_calendar_dates(room_name, missing)
+        if message and send_telegram(message) is False:
+            queue = load_failed_messages()
+            queue.append(message)
+            save_failed_messages(queue)
+
+    save_calendar_missing(room_id, missing_dates)
 
 
 def retry_failed_messages():
