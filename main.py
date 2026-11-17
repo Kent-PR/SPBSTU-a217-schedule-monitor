@@ -355,7 +355,7 @@ def instant_check(room_id, room_name, today, new_schedule=None):
     if not is_safe_schedule_update(snapshot, new_schedule, room_id, "Snapshot"):
         return
 
-    audit_google_calendar(room_id, room_name, today)
+    audit_google_calendar(room_id, room_name, new_schedule, today)
 
     added, removed = compare_schedules(snapshot, new_schedule)
 
@@ -373,9 +373,9 @@ def instant_check(room_id, room_name, today, new_schedule=None):
         logging.info(f"\tNo changes detected")
 
 
-def audit_google_calendar(room_id, room_name, today):
+def audit_google_calendar(room_id, room_name, schedule, today):
     try:
-        missing = find_missing_prod_events(room_id, today=today)
+        missing = find_missing_prod_events(room_id, schedule, today=today)
     except Exception:
         logging.exception("%s: Google Calendar audit failed", room_name)
         return
