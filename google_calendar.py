@@ -99,7 +99,51 @@ def _event_interval(event, timezone):
     return start.date().isoformat(), start.strftime("%H:%M"), end.strftime("%H:%M")
 
 
-def find_missing_prod_events(room_id, service=None, config=None, today=None):
+def _format_intervals(intervals, limit=20):
+    ordered = sorted(intervals)
+    visible = ordered[:limit]
+    text = ", ".join(
+        f"{event_date} {start}-{end}" for event_date, start, end in visible
+    )
+    if len(ordered) > limit:
+        text += f", ... +{len(ordered) - limit} more"
+    return text or "none"
+
+
+def _log_ruz_synchronized_mismatch(room_id, lessons, synchronized_intervals, today):
+    if lessons is None:
+        return
+
+    ruz_intervals = {
+        (lesson["date"], lesson["start"], lesson["end"])
+        for lesson in lessons
+        if str(lesson.get("room_id")) == str(room_id)
+        and today <= datetime.strptime(lesson["date"], "%Y-%m-%d").date()
+        <= END_DATE.date()
+    }
+    missing_in_synchronized = ruz_intervals - synchronized_intervals
+    extra_in_synchronized = synchronized_intervals - ruz_intervals
+    if not missing_in_synchronized and not extra_in_synchronized:
+        return
+
+    logging.warning(
+        "RUZ/synchronized calendar mismatch for room %s: "
+        "missing_in_synchronized=%s [%s]; extra_in_synchronized=%s [%s]",
+        room_id,
+        len(missing_in_synchronized),
+        _format_intervals(missing_in_synchronized),
+        len(extra_in_synchronized),
+        _format_intervals(extra_in_synchronized),
+    )
+
+
+def find_missing_prod_events(
+    room_id,
+    ruz_lessons=None,
+    service=None,
+    config=None,
+    today=None,
+):
     """Return synchronized calendar slots missing from the production calendar."""
     config = GOOGLE_CALENDAR if config is None else config
     if not config.get("enabled", False):
@@ -150,6 +194,9 @@ def find_missing_prod_events(room_id, service=None, config=None, today=None):
                 }
             )
 
+    _log_ruz_synchronized_mismatch(
+        room_id, ruz_lessons, seen_intervals, today
+    )
     missing.sort(key=lambda item: (item["date"], item["start"], item["end"]))
     logging.info(
         "Google Calendar audit for room %s: synchronized_events=%s "

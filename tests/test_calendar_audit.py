@@ -13,7 +13,7 @@ def test_calendar_audit_notifies_and_saves_new_missing_lessons(monkeypatch, less
     monkeypatch.setattr(main, "save_calendar_missing", save)
     monkeypatch.setattr(main, "send_or_queue", send)
 
-    main.audit_google_calendar(1948, "Room A.2.17", date(2026, 11, 16))
+    main.audit_google_calendar(1948, "Room A.2.17", missing, date(2026, 11, 16))
 
     assert "Не внесено в прод-календарь" in send.call_args.args[0]
     assert "18.11.2026" in send.call_args.args[0]
@@ -42,7 +42,7 @@ def test_calendar_audit_does_not_repeat_unchanged_alert(monkeypatch, lesson):
     monkeypatch.setattr(main, "save_calendar_missing", Mock())
     monkeypatch.setattr(main, "send_or_queue", send)
 
-    main.audit_google_calendar(1948, "Room A.2.17", date(2026, 11, 16))
+    main.audit_google_calendar(1948, "Room A.2.17", missing, date(2026, 11, 16))
 
     send.assert_not_called()
 
@@ -56,6 +56,6 @@ def test_calendar_audit_clears_saved_state_when_calendar_is_complete(
     monkeypatch.setattr(main, "save_calendar_missing", save)
     monkeypatch.setattr(main, "send_or_queue", Mock())
 
-    main.audit_google_calendar(1948, "Room A.2.17", date(2026, 11, 16))
+    main.audit_google_calendar(1948, "Room A.2.17", [], date(2026, 11, 16))
 
     save.assert_called_once_with(1948, [])

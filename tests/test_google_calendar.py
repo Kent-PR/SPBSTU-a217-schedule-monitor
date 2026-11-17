@@ -1,3 +1,4 @@
+import logging
 from unittest.mock import Mock
 
 import google_calendar
@@ -181,3 +182,25 @@ def test_enabled_audit_requires_both_calendars_for_room():
         assert "room 1948" in str(error)
     else:
         raise AssertionError("Missing synchronized calendar must be rejected")
+
+
+def test_ruz_synchronized_mismatch_is_logged(caplog, lesson):
+    synchronized = calendar_event()
+    production = calendar_event()
+    ruz_lesson = lesson(start="12:00", end="13:40")
+    service = FakeService(
+        [{"items": [synchronized]}, {"items": [production]}]
+    )
+
+    with caplog.at_level(logging.WARNING):
+        google_calendar.find_missing_prod_events(
+            1948,
+            [ruz_lesson],
+            service=service,
+            config=enabled_config(),
+            today=google_calendar.date(2026, 11, 16),
+        )
+
+    message = caplog.messages[-1]
+    assert "missing_in_synchronized=1 [2026-11-18 12:00-13:40]" in message
+    assert "extra_in_synchronized=1 [2026-11-18 10:00-11:40]" in message
