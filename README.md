@@ -45,28 +45,42 @@ Windows-службы. Тестовое сообщение в Telegram не от�
 ## 📁 Структура проекта
 
 ```
-├── main.py                 # Логика проверки расписания
-├── scheduler.py            # Планировщик проверок
-├── schedule_service.py     # Windows-сервис
-├── storage.py              # Работа с файлами и папками
-├── formatter.py            # Форматирование сообщений для Telegram
-├── conflict_checker.py     # Поиск конфликтов в расписании
-├── telegram_notifier.py    # Отправка уведомлений в Telegram (с фолбэком через прокси)
-├── constants.py            # Константы
-├── schedule_config.json    # Аудитории, семестр и расписание проверок
-├── private_config/         # Telegram и Google credentials (не в репо)
+├── main.py                    # Загрузка и сравнение расписания, основной цикл
+├── scheduler.py               # Планировщик мгновенных и сводных проверок
+├── schedule_service.py        # Обёртка Windows-службы
+├── storage.py                 # Атомарное хранение состояния в JSON
+├── normalization.py           # Нормализация и ключи занятий
+├── conflict_checker.py        # Поиск пересечений занятий
+├── formatter.py               # Формирование Telegram-сообщений
+├── telegram_notifier.py       # Отправка, разбиение и повтор сообщений
+├── google_calendar.py         # Аудит синхронизации Google Calendar
+├── constants.py               # Загрузка и проверка конфигурации
+├── diagnose.py                # Безопасная диагностика интеграций
+├── schedule_config.json       # Аудитории, семестр и параметры проверок
+├── requirements.txt           # Рабочие зависимости
+├── requirements-dev.txt       # Зависимости для разработки и тестов
+├── pytest.ini                 # Настройки pytest
+├── tests/                     # Автоматические тесты
+│   ├── conftest.py
+│   └── test_*.py
+├── private_config/            # Секреты (локально, каталог в .gitignore)
 │   ├── tg_credentials.py
 │   └── google_service_account.json
-├── data/                   # Расписания и изменения (не в репо)
-│   └── 1948/
-│       ├── 1948_current_schedule.json
-│       ├── 1948_snapshot_schedule.json
-│       └── 2026/03/12_(Чт)/
-│           └── changes/
-│               └── 1948_10_00_00.json
-├── messages_queue/         # Очередь неотправленных сообщений (не в репо)
+├── data/                      # Состояние аудиторий (локально, в .gitignore)
+│   ├── 1948/
+│   │   ├── 1948_current_schedule.json
+│   │   ├── 1948_snapshot_schedule.json
+│   │   ├── 1948_calendar_missing.json
+│   │   ├── 1948_availability_state.json  # Появляется после ошибки API
+│   │   └── YYYY/MM/DD_День/changes/*.json
+│   └── 1949/
+│       └── ...
+├── messages_queue/            # Очередь Telegram (локально, в .gitignore)
 │   └── failed_messages.json
-└── logs/                   # Логи работы сервиса (не в репо)
+├── logs/                      # Ротационные логи (локально, в .gitignore)
+│   └── schedule_service.log*
+├── .gitignore
+└── README.md
 ```
 
 ## ⚙️ Конфигурация мониторинга
