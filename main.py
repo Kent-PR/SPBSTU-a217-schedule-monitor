@@ -7,7 +7,11 @@ from datetime import datetime, timedelta
 from storage import load_current_schedule, save_current_schedule, save_changes, load_snapshot_schedule,\
     save_snapshot_schedule, load_failed_messages, save_failed_messages, load_calendar_missing,\
     save_calendar_missing
-from telegram_notifier import send_telegram
+from telegram_notifier import (
+    prepare_retry_parts,
+    send_telegram,
+    send_telegram_detailed,
+)
 from formatter import format_changes, format_conflicts, format_missing_calendar_dates
 from conflict_checker import find_conflicts
 from constants import BUILDING_ID, ROOMS, START_DATE, END_DATE
@@ -298,10 +302,7 @@ def instant_check(room_id, room_name, today):
         save_changes(room_id, today.strftime("%Y-%m-%d"), added, removed)
         msg = format_changes(room_name, added, removed)
         if msg:
-            if send_telegram(msg) is False:
-                queue = load_failed_messages()
-                queue.append(msg)
-                save_failed_messages(queue)
+            send_or_queue(msg)
     else:
         logging.info(f"\tNo changes detected")
 
@@ -324,12 +325,19 @@ def audit_google_calendar(room_id, room_name, schedule, today):
 
     if missing:
         message = format_missing_calendar_dates(room_name, missing)
-        if message and send_telegram(message) is False:
-            queue = load_failed_messages()
-            queue.append(message)
-            save_failed_messages(queue)
+        if message:
+            send_or_queue(message)
 
     save_calendar_missing(room_id, missing_dates)
+
+
+def send_or_queue(message):
+    result = send_telegram_detailed(message)
+    if result.status is False:
+        queue = load_failed_messages()
+        queue.extend(prepare_retry_parts(result.remaining_parts))
+        save_failed_messages(queue)
+    return result.status
 
 
 def retry_failed_messages():
@@ -338,7 +346,10 @@ def retry_failed_messages():
         return
 
     still_failed = []
-    for msg in queue:
+    pending_parts = prepare_retry_parts(
+        message for message in queue if isinstance(message, str)
+    )
+    for msg in pending_parts:
         stamped_msg = msg + f"\n\nОтправлено с задержкой: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
         if send_telegram(stamped_msg) is False:
             still_failed.append(msg)
@@ -368,10 +379,7 @@ def summary_check(room_id, room_name, today):
         logging.warning(f"\t⚠ Changes detected⚠")
         msg = format_changes(room_name, added, removed)
         if msg:
-            if send_telegram(msg) is False:
-                queue = load_failed_messages()
-                queue.append(msg)
-                save_failed_messages(queue)
+            send_or_queue(msg)
     else:
         logging.info(f"\tNo changes detected")
 
@@ -381,7 +389,7 @@ def summary_check(room_id, room_name, today):
         logging.warning(f"\t⚠ Conflicts found: {len(conflicts)}")
         conflict_msg = format_conflicts(room_name, conflicts)
         if conflict_msg:
-            send_telegram(conflict_msg)
+            send_or_queue(conflict_msg)
     else:
         logging.info(f"\tNo conflicts detected")
 
