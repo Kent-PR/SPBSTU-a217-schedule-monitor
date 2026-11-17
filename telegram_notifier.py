@@ -1,9 +1,9 @@
 import requests
 import logging
 import time
+from dataclasses import dataclass
 from html import escape
 from tg_credentials import TG_TOKEN, TG_CHAT_ID, TG_PROXY
-from storage import load_failed_messages, save_failed_messages
 
 TOKEN = TG_TOKEN
 CHAT_ID = TG_CHAT_ID
@@ -15,6 +15,13 @@ PROXIES = {
 
 API_URL = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
 MAX_MESSAGE_LENGTH = 4000
+RETRY_QUEUE_PART_LENGTH = MAX_MESSAGE_LENGTH - 200
+
+
+@dataclass(frozen=True)
+class TelegramSendResult:
+    status: bool | None
+    remaining_parts: tuple[str, ...]
 
 
 def split_message(text: str, max_length=MAX_MESSAGE_LENGTH):
@@ -99,7 +106,7 @@ def _send_chunk(text: str, retries, delay):
         return False
 
 
-def send_telegram(text: str, retries=3, delay=30):
+def send_telegram_detailed(text: str, retries=3, delay=30):
     chunks = split_message(text)
 
     for index, chunk in enumerate(chunks, start=1):
@@ -110,6 +117,18 @@ def send_telegram(text: str, retries=3, delay=30):
                 index,
                 len(chunks),
             )
-            return result
+            return TelegramSendResult(result, tuple(chunks[index - 1:]))
 
-    return True
+    return TelegramSendResult(True, ())
+
+
+def send_telegram(text: str, retries=3, delay=30):
+    return send_telegram_detailed(text, retries, delay).status
+
+
+def prepare_retry_parts(parts):
+    retry_parts = []
+    for part in parts:
+        retry_parts.extend(split_message(part, RETRY_QUEUE_PART_LENGTH))
+
+    return retry_parts

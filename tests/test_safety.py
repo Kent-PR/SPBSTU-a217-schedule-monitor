@@ -14,7 +14,7 @@ def test_instant_check_does_not_replace_nonempty_snapshot_with_empty(
     monkeypatch.setattr(main, "load_snapshot_schedule", Mock(return_value=[lesson()]))
     monkeypatch.setattr(main, "save_snapshot_schedule", save_snapshot)
     monkeypatch.setattr(main, "save_changes", save_changes)
-    monkeypatch.setattr(main, "send_telegram", send)
+    monkeypatch.setattr(main, "send_or_queue", send)
 
     main.instant_check(1948, "Room", date(2026, 11, 16))
 
@@ -33,7 +33,7 @@ def test_summary_check_preserves_both_baselines_on_empty_response(
     monkeypatch.setattr(main, "load_current_schedule", Mock(return_value=[lesson()]))
     monkeypatch.setattr(main, "save_current_schedule", save_current)
     monkeypatch.setattr(main, "save_snapshot_schedule", save_snapshot)
-    monkeypatch.setattr(main, "send_telegram", send)
+    monkeypatch.setattr(main, "send_or_queue", send)
 
     main.summary_check(1948, "Room", date(2026, 11, 16))
 

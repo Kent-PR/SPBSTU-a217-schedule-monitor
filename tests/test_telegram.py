@@ -75,6 +75,47 @@ def test_chunks_are_sent_in_order(monkeypatch):
     ]
 
 
+def test_detailed_result_contains_only_unsent_and_later_parts(monkeypatch):
+    post = Mock(
+        side_effect=[
+            successful_response(),
+            requests.ConnectionError("proxy down"),
+            requests.ConnectionError("direct down"),
+        ]
+    )
+    monkeypatch.setattr(notifier.requests, "post", post)
+
+    result = notifier.send_telegram_detailed("a" * 8001, retries=1, delay=0)
+
+    assert result.status is False
+    assert [len(part) for part in result.remaining_parts] == [4000, 1]
+
+
+def test_send_or_queue_saves_only_unsent_parts(monkeypatch):
+    result = notifier.TelegramSendResult(False, ("b" * 4000, "c"))
+    save = Mock()
+    monkeypatch.setattr(main, "send_telegram_detailed", Mock(return_value=result))
+    monkeypatch.setattr(main, "load_failed_messages", Mock(return_value=["existing"]))
+    monkeypatch.setattr(main, "save_failed_messages", save)
+
+    assert main.send_or_queue("original") is False
+    save.assert_called_once_with(["existing", "b" * 3800, "b" * 200, "c"])
+
+
+def test_legacy_long_queue_is_split_before_retry(monkeypatch):
+    save = Mock()
+    send = Mock(return_value=False)
+    monkeypatch.setattr(main, "load_failed_messages", Mock(return_value=["x" * 8001]))
+    monkeypatch.setattr(main, "save_failed_messages", save)
+    monkeypatch.setattr(main, "send_telegram", send)
+
+    main.retry_failed_messages()
+
+    queued_again = save.call_args.args[0]
+    assert [len(part) for part in queued_again] == [3800, 3800, 401]
+    assert send.call_count == 3
+
+
 @pytest.mark.parametrize(
     ("send_result", "expected_queue"),
     [
