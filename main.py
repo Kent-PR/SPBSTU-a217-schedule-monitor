@@ -29,7 +29,7 @@ from constants import (
     OUTAGE_ALERT_THRESHOLD,
 )
 from normalization import lesson_key, normalize_lesson, normalize_text
-from google_calendar import find_missing_lessons
+from google_calendar import find_missing_prod_events
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -355,7 +355,7 @@ def instant_check(room_id, room_name, today, new_schedule=None):
     if not is_safe_schedule_update(snapshot, new_schedule, room_id, "Snapshot"):
         return
 
-    audit_google_calendar(room_id, room_name, new_schedule, today)
+    audit_google_calendar(room_id, room_name, today)
 
     added, removed = compare_schedules(snapshot, new_schedule)
 
@@ -373,20 +373,24 @@ def instant_check(room_id, room_name, today, new_schedule=None):
         logging.info(f"\tNo changes detected")
 
 
-def audit_google_calendar(room_id, room_name, schedule, today):
+def audit_google_calendar(room_id, room_name, today):
     try:
-        missing = find_missing_lessons(room_id, schedule, today=today)
+        missing = find_missing_prod_events(room_id, today=today)
     except Exception:
         logging.exception("%s: Google Calendar audit failed", room_name)
         return
 
     previous = load_calendar_missing(room_id)
-    previous_dates = {
-        item["date"] if isinstance(item, dict) else str(item)
+    previous_keys = {
+        f"{item['date']}|{item['start']}|{item['end']}"
+        if isinstance(item, dict)
+        else str(item)
         for item in previous
     }
-    missing_dates = sorted({item["date"] for item in missing})
-    if previous_dates == set(missing_dates):
+    missing_keys = sorted(
+        {f"{item['date']}|{item['start']}|{item['end']}" for item in missing}
+    )
+    if previous_keys == set(missing_keys):
         return
 
     if missing:
@@ -394,7 +398,7 @@ def audit_google_calendar(room_id, room_name, schedule, today):
         if message:
             send_or_queue(message)
 
-    save_calendar_missing(room_id, missing_dates)
+    save_calendar_missing(room_id, missing_keys)
 
 
 def send_or_queue(message):

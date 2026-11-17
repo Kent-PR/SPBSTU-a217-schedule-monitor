@@ -99,50 +99,64 @@ def _event_interval(event, timezone):
     return start.date().isoformat(), start.strftime("%H:%M"), end.strftime("%H:%M")
 
 
-def find_missing_lessons(
-    room_id,
-    lessons,
-    service=None,
-    config=None,
-    today=None,
-):
-    """Return future RUZ lessons with no exact time slot in the room calendar."""
+def find_missing_prod_events(room_id, service=None, config=None, today=None):
+    """Return synchronized calendar slots missing from the production calendar."""
     config = GOOGLE_CALENDAR if config is None else config
     if not config.get("enabled", False):
         return []
 
     today = today or date.today()
-    calendars = config.get("calendars", {})
-    calendar_id = calendars.get(room_id) or calendars.get(str(room_id))
-    if not calendar_id:
+    synchronized_calendars = config.get("synchronized_calendars", {})
+    production_calendars = config.get("production_calendars", {})
+    synchronized_id = synchronized_calendars.get(room_id) or synchronized_calendars.get(
+        str(room_id)
+    )
+    production_id = production_calendars.get(room_id) or production_calendars.get(
+        str(room_id)
+    )
+    if not synchronized_id or not production_id:
         raise GoogleCalendarConfigError(
-            f"Google calendar id is not configured for room {room_id}"
+            f"Both synchronized and production calendar ids are required for room {room_id}"
         )
+
     timezone = config["timezone"]
     service = service or _build_service(config["credentials_file"])
-    events = _list_events(service, calendar_id, timezone, today)
-    occupied_intervals = {
+    synchronized_events = _list_events(service, synchronized_id, timezone, today)
+    production_events = _list_events(service, production_id, timezone, today)
+    production_intervals = {
         interval
-        for event in events
+        for event in production_events
         if (interval := _event_interval(event, timezone)) is not None
     }
 
     missing = []
-    for lesson in lessons:
-        if str(lesson.get("room_id")) != str(room_id):
+    seen_intervals = set()
+    for event in synchronized_events:
+        interval = _event_interval(event, timezone)
+        if interval is None or interval in seen_intervals:
             continue
-        lesson_date = datetime.strptime(lesson["date"], "%Y-%m-%d").date()
-        if lesson_date < today or lesson_date > END_DATE.date():
+        event_date = datetime.strptime(interval[0], "%Y-%m-%d").date()
+        if event_date < today or event_date > END_DATE.date():
             continue
-        interval = (lesson["date"], lesson["start"], lesson["end"])
-        if interval not in occupied_intervals:
-            missing.append(lesson)
+        seen_intervals.add(interval)
+        if interval not in production_intervals:
+            missing.append(
+                {
+                    "room_id": room_id,
+                    "date": interval[0],
+                    "start": interval[1],
+                    "end": interval[2],
+                    "subject": event.get("summary") or "—",
+                }
+            )
 
-    missing.sort(key=lambda lesson: (lesson["date"], lesson["start"], lesson["end"]))
+    missing.sort(key=lambda item: (item["date"], item["start"], item["end"]))
     logging.info(
-        "Google Calendar audit for room %s: calendar_events=%s missing_lessons=%s",
+        "Google Calendar audit for room %s: synchronized_events=%s "
+        "production_events=%s missing_events=%s",
         room_id,
-        len(events),
+        len(synchronized_events),
+        len(production_events),
         len(missing),
     )
     return missing

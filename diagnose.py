@@ -145,22 +145,31 @@ def check_google_calendar():
         return [CheckResult("Google Calendar", "FAIL", str(error))]
 
     results = []
+    calendar_sets = (
+        ("synchronized", GOOGLE_CALENDAR["synchronized_calendars"]),
+        ("production", GOOGLE_CALENDAR["production_calendars"]),
+    )
     for room_id, room_name in ROOMS.items():
-        calendar_id = GOOGLE_CALENDAR["calendars"].get(room_id)
-        try:
-            metadata = service.calendars().get(calendarId=calendar_id).execute()
-            summary = metadata.get("summary") or "unnamed calendar"
-            results.append(
-                CheckResult(
-                    f"Calendar {room_name}",
-                    "OK",
-                    f"read access confirmed: {summary}",
+        for calendar_type, calendars in calendar_sets:
+            calendar_id = calendars.get(room_id)
+            try:
+                metadata = service.calendars().get(calendarId=calendar_id).execute()
+                summary = metadata.get("summary") or "unnamed calendar"
+                results.append(
+                    CheckResult(
+                        f"Calendar {room_name} ({calendar_type})",
+                        "OK",
+                        f"read access confirmed: {summary}",
+                    )
                 )
-            )
-        except Exception as error:
-            results.append(
-                CheckResult(f"Calendar {room_name}", "FAIL", str(error))
-            )
+            except Exception as error:
+                results.append(
+                    CheckResult(
+                        f"Calendar {room_name} ({calendar_type})",
+                        "FAIL",
+                        str(error),
+                    )
+                )
     return results
 
 

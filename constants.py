@@ -88,36 +88,44 @@ def _load_config():
     if not isinstance(enabled, bool):
         raise RuntimeError("'google_calendar.enabled' must be a boolean")
 
-    raw_calendars = google_calendar.get("calendars", {})
-    if not isinstance(raw_calendars, dict):
-        raise RuntimeError("'google_calendar.calendars' must be an object")
+    calendar_sets = {}
+    for setting_name in ("synchronized_calendars", "production_calendars"):
+        raw_calendars = google_calendar.get(setting_name, {})
+        if not isinstance(raw_calendars, dict):
+            raise RuntimeError(
+                f"'google_calendar.{setting_name}' must be an object"
+            )
 
-    calendars = {}
-    for raw_room_id, calendar_id in raw_calendars.items():
-        try:
-            room_id = int(raw_room_id)
-        except (TypeError, ValueError) as error:
-            raise RuntimeError(
-                f"Invalid room id in 'google_calendar.calendars': {raw_room_id!r}"
-            ) from error
-        if room_id not in rooms:
-            raise RuntimeError(
-                f"Unknown room id in 'google_calendar.calendars': {room_id}"
-            )
-        if not isinstance(calendar_id, str):
-            raise RuntimeError(
-                f"Calendar id for room {room_id} must be a string"
-            )
-        calendars[room_id] = calendar_id.strip()
+        calendars = {}
+        for raw_room_id, calendar_id in raw_calendars.items():
+            try:
+                room_id = int(raw_room_id)
+            except (TypeError, ValueError) as error:
+                raise RuntimeError(
+                    f"Invalid room id in 'google_calendar.{setting_name}': "
+                    f"{raw_room_id!r}"
+                ) from error
+            if room_id not in rooms:
+                raise RuntimeError(
+                    f"Unknown room id in 'google_calendar.{setting_name}': {room_id}"
+                )
+            if not isinstance(calendar_id, str):
+                raise RuntimeError(
+                    f"Calendar id for room {room_id} must be a string"
+                )
+            calendars[room_id] = calendar_id.strip()
 
-    if enabled:
-        missing_calendars = [room_id for room_id in rooms if not calendars.get(room_id)]
-        if missing_calendars:
-            missing = ", ".join(str(room_id) for room_id in missing_calendars)
-            raise RuntimeError(
-                "Google Calendar is enabled, but calendar ids are missing for "
-                f"rooms: {missing}"
-            )
+        if enabled:
+            missing_calendars = [
+                room_id for room_id in rooms if not calendars.get(room_id)
+            ]
+            if missing_calendars:
+                missing = ", ".join(str(room_id) for room_id in missing_calendars)
+                raise RuntimeError(
+                    f"Google Calendar '{setting_name}' ids are missing for rooms: "
+                    f"{missing}"
+                )
+        calendar_sets[setting_name] = calendars
 
     credentials_file = google_calendar.get(
         "credentials_file", "private_config/google_service_account.json"
@@ -134,7 +142,7 @@ def _load_config():
 
     google_calendar_config = {
         "enabled": enabled,
-        "calendars": calendars,
+        **calendar_sets,
         "credentials_file": credentials_file.strip(),
         "timezone": timezone.strip(),
     }
