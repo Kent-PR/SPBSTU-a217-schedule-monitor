@@ -4,32 +4,26 @@ import google_calendar
 
 
 class FakeRequest:
+    def __init__(self, response=None):
+        self.response = response or {}
+
     def execute(self):
-        return {}
+        return self.response
 
 
 class FakeEvents:
-    def __init__(self):
-        self.inserted = []
-        self.updated = []
-        self.deleted = []
+    def __init__(self, pages=None):
+        self.pages = list(pages or [{"items": []}])
+        self.list_calls = []
 
-    def insert(self, **kwargs):
-        self.inserted.append(kwargs)
-        return FakeRequest()
-
-    def update(self, **kwargs):
-        self.updated.append(kwargs)
-        return FakeRequest()
-
-    def delete(self, **kwargs):
-        self.deleted.append(kwargs)
-        return FakeRequest()
+    def list(self, **kwargs):
+        self.list_calls.append(kwargs)
+        return FakeRequest(self.pages.pop(0))
 
 
 class FakeService:
-    def __init__(self):
-        self.events_api = FakeEvents()
+    def __init__(self, pages=None):
+        self.events_api = FakeEvents(pages)
 
     def events(self):
         return self.events_api
@@ -43,114 +37,108 @@ def enabled_config():
             1949: "calendar-1949@example.com",
         },
         "credentials_file": "unused-in-tests.json",
-        "timezone": "Europe/Moscow",
+        "timezone": "UTC",
     }
 
 
-def event_for(lesson, room_name="Room A.2.17", event_id="event-1"):
-    body = google_calendar._event_body(lesson, room_name, "Europe/Moscow")
-    body["id"] = event_id
-    return body
+def calendar_event(start="2026-11-18T10:00:00Z", end="2026-11-18T11:40:00Z"):
+    return {
+        "start": {"dateTime": start},
+        "end": {"dateTime": end},
+    }
 
 
-def test_disabled_sync_does_not_build_google_service(monkeypatch, lesson):
+def test_disabled_audit_does_not_build_google_service(monkeypatch, lesson):
     build = Mock()
     monkeypatch.setattr(google_calendar, "_build_service", build)
-    stats = google_calendar.sync_schedule(
-        1948, "Room", [lesson()], config={"enabled": False}
+    missing = google_calendar.find_missing_lessons(
+        1948, [lesson()], config={"enabled": False}
     )
-    assert stats["disabled"] is True
+    assert missing == []
     build.assert_not_called()
 
 
-def test_sync_creates_missing_lesson(monkeypatch, lesson):
+def test_audit_reports_missing_lesson(lesson):
     service = FakeService()
-    monkeypatch.setattr(google_calendar, "_list_managed_events", Mock(return_value=[]))
-    stats = google_calendar.sync_schedule(
-        1948, "Room A.2.17", [lesson()], service=service, config=enabled_config()
-    )
-    assert stats == {"created": 1, "updated": 0, "deleted": 0, "disabled": False}
-    body = service.events_api.inserted[0]["body"]
-    assert body["summary"] == "Высшая математика"
-    assert body["start"]["timeZone"] == "Europe/Moscow"
-    assert body["extendedProperties"]["private"]["ruzSource"] == "ruz_hack"
-    assert service.events_api.inserted[0]["calendarId"] == "calendar-1948@example.com"
-
-
-def test_sync_keeps_unchanged_event(monkeypatch, lesson):
-    service = FakeService()
-    existing = event_for(lesson())
-    monkeypatch.setattr(
-        google_calendar, "_list_managed_events", Mock(return_value=[existing])
-    )
-    stats = google_calendar.sync_schedule(
-        1948, "Room A.2.17", [lesson()], service=service, config=enabled_config()
-    )
-    assert stats == {"created": 0, "updated": 0, "deleted": 0, "disabled": False}
-
-
-def test_sync_updates_changed_details(monkeypatch, lesson):
-    service = FakeService()
-    current = lesson()
-    existing = event_for(current)
-    existing["extendedProperties"]["private"]["ruzFingerprint"] = "old"
-    monkeypatch.setattr(
-        google_calendar, "_list_managed_events", Mock(return_value=[existing])
-    )
-    stats = google_calendar.sync_schedule(
-        1948, "Room A.2.17", [current], service=service, config=enabled_config()
-    )
-    assert stats["updated"] == 1
-    assert service.events_api.updated[0]["eventId"] == "event-1"
-
-
-def test_sync_deletes_event_removed_from_ruz(monkeypatch, lesson):
-    service = FakeService()
-    existing = event_for(lesson())
-    monkeypatch.setattr(
-        google_calendar, "_list_managed_events", Mock(return_value=[existing])
-    )
-    stats = google_calendar.sync_schedule(
-        1948, "Room A.2.17", [], service=service, config=enabled_config()
-    )
-    assert stats["deleted"] == 1
-    assert service.events_api.deleted[0]["eventId"] == "event-1"
-
-
-def test_sync_only_uses_lessons_for_requested_room(monkeypatch, lesson):
-    service = FakeService()
-    monkeypatch.setattr(google_calendar, "_list_managed_events", Mock(return_value=[]))
-    google_calendar.sync_schedule(
+    missing = google_calendar.find_missing_lessons(
         1948,
-        "Room A.2.17",
-        [lesson(room_id=1949)],
+        [lesson()],
         service=service,
         config=enabled_config(),
+        today=google_calendar.date(2026, 11, 16),
     )
-    assert service.events_api.inserted == []
+    assert missing == [lesson()]
+    assert service.events_api.list_calls[0]["calendarId"] == "calendar-1948@example.com"
 
 
-def test_each_room_uses_its_own_calendar(monkeypatch, lesson):
+def test_audit_accepts_matching_time_slot(lesson):
+    service = FakeService([{"items": [calendar_event()]}])
+    missing = google_calendar.find_missing_lessons(
+        1948,
+        [lesson()],
+        service=service,
+        config=enabled_config(),
+        today=google_calendar.date(2026, 11, 16),
+    )
+    assert missing == []
+
+
+def test_audit_converts_event_offset_to_configured_timezone(lesson):
+    service = FakeService(
+        [{"items": [calendar_event("2026-11-18T13:00:00+03:00", "2026-11-18T14:40:00+03:00")]}]
+    )
+    missing = google_calendar.find_missing_lessons(
+        1948,
+        [lesson()],
+        service=service,
+        config=enabled_config(),
+        today=google_calendar.date(2026, 11, 16),
+    )
+    assert missing == []
+
+
+def test_audit_ignores_past_lessons(lesson):
     service = FakeService()
-    monkeypatch.setattr(google_calendar, "_list_managed_events", Mock(return_value=[]))
+    missing = google_calendar.find_missing_lessons(
+        1948,
+        [lesson(date="2026-11-15")],
+        service=service,
+        config=enabled_config(),
+        today=google_calendar.date(2026, 11, 16),
+    )
+    assert missing == []
 
-    google_calendar.sync_schedule(
-        1949,
-        "Room A.2.17 Mobile",
+
+def test_audit_only_uses_lessons_for_requested_room(lesson):
+    service = FakeService()
+    missing = google_calendar.find_missing_lessons(
+        1948,
         [lesson(room_id=1949)],
         service=service,
         config=enabled_config(),
+        today=google_calendar.date(2026, 11, 16),
     )
+    assert missing == []
 
-    assert service.events_api.inserted[0]["calendarId"] == "calendar-1949@example.com"
+
+def test_each_room_uses_its_own_calendar(lesson):
+    service = FakeService()
+    google_calendar.find_missing_lessons(
+        1949,
+        [lesson(room_id=1949)],
+        service=service,
+        config=enabled_config(),
+        today=google_calendar.date(2026, 11, 16),
+    )
+    assert service.events_api.list_calls[0]["calendarId"] == "calendar-1949@example.com"
 
 
-def test_enabled_sync_requires_calendar_for_room(lesson):
+def test_enabled_audit_requires_calendar_for_room(lesson):
     config = enabled_config()
     config["calendars"].pop(1948)
 
     try:
-        google_calendar.sync_schedule(1948, "Room", [lesson()], config=config)
+        google_calendar.find_missing_lessons(1948, [lesson()], config=config)
     except google_calendar.GoogleCalendarConfigError as error:
         assert "room 1948" in str(error)
     else:
