@@ -82,3 +82,13 @@ def format_conflicts(room_name, conflicts):
         ])
 
     return "\n".join(lines)
+
+
+def format_missing_calendar_dates(room_name, lessons):
+    if not lessons:
+        return None
+
+    lines = [f"⚠️ Не внесено в прод-календарь: {room_name}", ""]
+    dates = sorted({item["date"] for item in lessons})
+    lines.extend(f"📅 {format_date(date)}" for date in dates)
+    return "\n".join(lines)
