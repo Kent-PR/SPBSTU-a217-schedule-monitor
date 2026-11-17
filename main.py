@@ -7,15 +7,27 @@ from datetime import datetime, timedelta
 
 from storage import load_current_schedule, save_current_schedule, save_changes, load_snapshot_schedule,\
     save_snapshot_schedule, load_failed_messages, save_failed_messages, load_calendar_missing,\
-    save_calendar_missing
+    save_calendar_missing, load_availability_state, save_availability_state
 from telegram_notifier import (
     prepare_retry_parts,
     send_telegram,
     send_telegram_detailed,
 )
-from formatter import format_changes, format_conflicts, format_missing_calendar_dates
+from formatter import (
+    format_changes,
+    format_conflicts,
+    format_missing_calendar_dates,
+    format_schedule_outage,
+    format_schedule_recovery,
+)
 from conflict_checker import find_conflicts
-from constants import BUILDING_ID, ROOMS, START_DATE, END_DATE
+from constants import (
+    BUILDING_ID,
+    ROOMS,
+    START_DATE,
+    END_DATE,
+    OUTAGE_ALERT_THRESHOLD,
+)
 from normalization import lesson_key, normalize_lesson, normalize_text
 from google_calendar import find_missing_lessons
 
@@ -275,6 +287,37 @@ def is_safe_schedule_update(previous, new, room_id, source_name):
     return True
 
 
+def record_fetch_failure(room_id, room_name):
+    state = load_availability_state(room_id)
+    failures = state.get("consecutive_failures", 0) + 1
+    outage_notified = bool(state.get("outage_notified", False))
+    should_notify = failures >= OUTAGE_ALERT_THRESHOLD and not outage_notified
+
+    save_availability_state(
+        room_id,
+        {
+            "consecutive_failures": failures,
+            "outage_notified": outage_notified or should_notify,
+        },
+    )
+
+    if should_notify:
+        send_or_queue(format_schedule_outage(room_name, failures))
+
+
+def record_fetch_success(room_id, room_name):
+    state = load_availability_state(room_id)
+    failures = state.get("consecutive_failures", 0)
+    if not failures:
+        return
+
+    outage_notified = bool(state.get("outage_notified", False))
+    save_availability_state(room_id, {})
+
+    if outage_notified:
+        send_or_queue(format_schedule_recovery(room_name, failures))
+
+
 def run_check(is_summary=False):
     today = datetime.now().date()
     retry_failed_messages()
@@ -287,8 +330,10 @@ def run_check(is_summary=False):
             new_schedule = fetch_full_schedule(room_id)
         except Exception:
             logging.exception("%s: failed to fetch schedule", room_name)
+            record_fetch_failure(room_id, room_name)
             continue
 
+        record_fetch_success(room_id, room_name)
         instant_check(room_id, room_name, today, new_schedule)
         if is_summary:
             summary_check(room_id, room_name, today, new_schedule)
