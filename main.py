@@ -29,7 +29,7 @@ from constants import (
     OUTAGE_ALERT_THRESHOLD,
 )
 from normalization import lesson_key, normalize_lesson, normalize_text
-from google_calendar import find_missing_prod_events
+from google_calendar import find_missing_prod_events, sync_synchronized_calendar
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -354,6 +354,13 @@ def instant_check(room_id, room_name, today, new_schedule=None):
     snapshot = load_snapshot_schedule(room_id)
     if not is_safe_schedule_update(snapshot, new_schedule, room_id, "Snapshot"):
         return
+
+    try:
+        sync_synchronized_calendar(room_id, room_name, new_schedule)
+    except Exception:
+        logging.exception(
+            "%s: synchronized Google Calendar update failed", room_name
+        )
 
     audit_google_calendar(room_id, room_name, new_schedule, today)
 

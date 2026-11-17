@@ -49,6 +49,8 @@ def test_failure_of_first_room_does_not_skip_second_room(monkeypatch):
     monkeypatch.setattr(main, "retry_failed_messages", Mock())
     monkeypatch.setattr(main, "record_fetch_failure", Mock())
     monkeypatch.setattr(main, "record_fetch_success", Mock())
+    monkeypatch.setattr(main, "sync_synchronized_calendar", Mock())
+    monkeypatch.setattr(main, "audit_google_calendar", Mock())
 
     main.run_check()
 

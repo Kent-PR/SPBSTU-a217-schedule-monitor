@@ -16,10 +16,25 @@ class FakeEvents:
     def __init__(self, pages=None):
         self.pages = list(pages or [{"items": []}, {"items": []}])
         self.list_calls = []
+        self.inserted = []
+        self.updated = []
+        self.deleted = []
 
     def list(self, **kwargs):
         self.list_calls.append(kwargs)
         return FakeRequest(self.pages.pop(0))
+
+    def insert(self, **kwargs):
+        self.inserted.append(kwargs)
+        return FakeRequest()
+
+    def update(self, **kwargs):
+        self.updated.append(kwargs)
+        return FakeRequest()
+
+    def delete(self, **kwargs):
+        self.deleted.append(kwargs)
+        return FakeRequest()
 
 
 class FakeService:
@@ -66,6 +81,124 @@ def expected_missing():
         "end": "11:40",
         "subject": "Mathematics",
     }
+
+
+def managed_event(lesson, room_name="Room A.2.17", event_id="event-1"):
+    event = google_calendar._event_body(lesson, room_name, "UTC")
+    event["id"] = event_id
+    return event
+
+
+def test_disabled_sync_does_not_build_google_service(monkeypatch, lesson):
+    build = Mock()
+    monkeypatch.setattr(google_calendar, "_build_service", build)
+
+    stats = google_calendar.sync_synchronized_calendar(
+        1948, "Room", [lesson()], config={"enabled": False}
+    )
+
+    assert stats["disabled"] is True
+    build.assert_not_called()
+
+
+def test_sync_creates_missing_lesson(monkeypatch, lesson):
+    service = FakeService()
+    monkeypatch.setattr(
+        google_calendar, "_list_managed_events", Mock(return_value=[])
+    )
+
+    stats = google_calendar.sync_synchronized_calendar(
+        1948,
+        "Room A.2.17",
+        [lesson()],
+        service=service,
+        config=enabled_config(),
+    )
+
+    assert stats == {"created": 1, "updated": 0, "deleted": 0, "disabled": False}
+    inserted = service.events_api.inserted[0]
+    assert inserted["calendarId"] == "sync-1948@example.com"
+    assert inserted["body"]["extendedProperties"]["private"]["ruzSource"] == "ruz_hack"
+
+
+def test_sync_keeps_unchanged_managed_event(monkeypatch, lesson):
+    service = FakeService()
+    existing = managed_event(lesson())
+    monkeypatch.setattr(
+        google_calendar, "_list_managed_events", Mock(return_value=[existing])
+    )
+
+    stats = google_calendar.sync_synchronized_calendar(
+        1948,
+        "Room A.2.17",
+        [lesson()],
+        service=service,
+        config=enabled_config(),
+    )
+
+    assert stats == {"created": 0, "updated": 0, "deleted": 0, "disabled": False}
+
+
+def test_sync_updates_changed_managed_event(monkeypatch, lesson):
+    service = FakeService()
+    existing = managed_event(lesson())
+    existing["extendedProperties"]["private"]["ruzFingerprint"] = "old"
+    monkeypatch.setattr(
+        google_calendar, "_list_managed_events", Mock(return_value=[existing])
+    )
+
+    stats = google_calendar.sync_synchronized_calendar(
+        1948,
+        "Room A.2.17",
+        [lesson()],
+        service=service,
+        config=enabled_config(),
+    )
+
+    assert stats["updated"] == 1
+    assert service.events_api.updated[0]["eventId"] == "event-1"
+
+
+def test_sync_deletes_managed_event_removed_from_ruz(monkeypatch, lesson):
+    service = FakeService()
+    existing = managed_event(lesson())
+    monkeypatch.setattr(
+        google_calendar, "_list_managed_events", Mock(return_value=[existing])
+    )
+
+    stats = google_calendar.sync_synchronized_calendar(
+        1948,
+        "Room A.2.17",
+        [],
+        service=service,
+        config=enabled_config(),
+    )
+
+    assert stats["deleted"] == 1
+    assert service.events_api.deleted[0]["eventId"] == "event-1"
+
+
+def test_sync_never_writes_to_production_calendar(monkeypatch, lesson):
+    service = FakeService()
+    monkeypatch.setattr(
+        google_calendar, "_list_managed_events", Mock(return_value=[])
+    )
+
+    google_calendar.sync_synchronized_calendar(
+        1949,
+        "Room A.2.17 Mobile",
+        [lesson(room_id=1949)],
+        service=service,
+        config=enabled_config(),
+    )
+
+    assert service.events_api.inserted[0]["calendarId"] == "sync-1949@example.com"
+    assert all(
+        call["calendarId"] != "prod-1949@example.com"
+        for call in service.events_api.inserted
+        + service.events_api.updated
+        + service.events_api.deleted
+    )
 
 
 def test_disabled_audit_does_not_build_google_service(monkeypatch):
