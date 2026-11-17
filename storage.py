@@ -76,6 +76,24 @@ def save_snapshot_schedule(room_id, data):
         json.dump(data, f, ensure_ascii=False, indent=4)
 
 
+def get_calendar_missing_path(room_id):
+    return get_room_dir(room_id) / f"{room_id}_calendar_missing.json"
+
+
+def load_calendar_missing(room_id):
+    path = get_calendar_missing_path(room_id)
+    if not path.exists():
+        return []
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def save_calendar_missing(room_id, data):
+    path = get_calendar_missing_path(room_id)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
+
+
 def get_failed_messages_path():
     return MESSAGES_DIR / "failed_messages.json"
 
