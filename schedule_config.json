@@ -16,8 +16,8 @@
     "google_calendar": {
         "enabled": true,
         "calendars": {
-            "1948": "5b4af4777a4dc922c822e7fd1c8c7b25c9753573a8dc1e4f07f8bd02cb016afd@group.calendar.google.com",
-            "1949": "cf5c0e41760da928cc9826b4c6f97acb47f49c8a6b7a1fb9277352bf9ea61906@group.calendar.google.com"
+            "1948": "cknggn08jahp525v2mhiod2fa8@group.calendar.google.com",
+            "1949": "litp18bs4bt7eif6j9pubrj2o0@group.calendar.google.com"
         },
         "credentials_file": "google_service_account.json",
         "timezone": "Europe/Moscow"
