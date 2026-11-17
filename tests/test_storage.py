@@ -60,6 +60,7 @@ def test_all_storage_saves_use_atomic_writer(tmp_path, monkeypatch):
     storage.save_snapshot_schedule(1948, ["snapshot"])
     storage.save_changes(1948, "2026-11-17", ["added"], ["removed"])
     storage.save_calendar_missing(1948, ["2026-11-18"])
+    storage.save_availability_state(1948, {"consecutive_failures": 1})
     storage.save_failed_messages(["message"])
 
-    assert atomic.call_count == 5
+    assert atomic.call_count == 6

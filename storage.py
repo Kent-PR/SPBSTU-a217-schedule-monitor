@@ -122,6 +122,23 @@ def save_calendar_missing(room_id, data):
     atomic_write_json(path, data)
 
 
+def get_availability_state_path(room_id):
+    return get_room_dir(room_id) / f"{room_id}_availability_state.json"
+
+
+def load_availability_state(room_id):
+    path = get_availability_state_path(room_id)
+    if not path.exists():
+        return {}
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def save_availability_state(room_id, data):
+    path = get_availability_state_path(room_id)
+    atomic_write_json(path, data)
+
+
 def get_failed_messages_path():
     return MESSAGES_DIR / "failed_messages.json"
 

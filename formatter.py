@@ -92,3 +92,18 @@ def format_missing_calendar_dates(room_name, lessons):
     dates = sorted({item["date"] for item in lessons})
     lines.extend(f"📅 {format_date(date)}" for date in dates)
     return "\n".join(lines)
+
+
+def format_schedule_outage(room_name, failures):
+    return (
+        f"⚠️ Расписание недоступно: {room_name}\n\n"
+        f"Последовательных ошибок загрузки: {failures}. "
+        "Мониторинг продолжает попытки."
+    )
+
+
+def format_schedule_recovery(room_name, failures):
+    return (
+        f"✅ Доступ к расписанию восстановлен: {room_name}\n\n"
+        f"Предшествовавших ошибок загрузки: {failures}."
+    )

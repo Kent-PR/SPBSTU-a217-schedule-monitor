@@ -58,6 +58,14 @@ def _load_config():
     if isinstance(check_interval, bool) or not isinstance(check_interval, int) or check_interval <= 0:
         raise RuntimeError("'check_interval_seconds' must be a positive integer")
 
+    outage_alert_threshold = config.get("outage_alert_threshold", 3)
+    if (
+        isinstance(outage_alert_threshold, bool)
+        or not isinstance(outage_alert_threshold, int)
+        or outage_alert_threshold <= 0
+    ):
+        raise RuntimeError("'outage_alert_threshold' must be a positive integer")
+
     raw_summary_times = config.get("summary_times")
     if not isinstance(raw_summary_times, list):
         raise RuntimeError("'summary_times' must be a list of HH:MM strings")
@@ -137,6 +145,7 @@ def _load_config():
         start_date,
         end_date,
         check_interval,
+        outage_alert_threshold,
         summary_times,
         google_calendar_config,
     )
@@ -148,6 +157,7 @@ def _load_config():
     START_DATE,
     END_DATE,
     CHECK_INTERVAL,
+    OUTAGE_ALERT_THRESHOLD,
     SUMMARY_TIMES,
     GOOGLE_CALENDAR,
 ) = _load_config()
