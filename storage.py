@@ -1,4 +1,6 @@
 import json
+import os
+import tempfile
 from pathlib import Path
 from datetime import datetime
 from constants import WEEKDAYS_RU
@@ -8,6 +10,36 @@ DATA_DIR = BASE_DIR / "data"
 
 MESSAGES_DIR = BASE_DIR / "messages_queue"
 MESSAGES_DIR.mkdir(exist_ok=True)
+
+
+def atomic_write_json(path, data):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = None
+
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temp_file:
+            temp_path = Path(temp_file.name)
+            json.dump(data, temp_file, ensure_ascii=False, indent=4)
+            temp_file.write("\n")
+            temp_file.flush()
+            os.fsync(temp_file.fileno())
+
+        os.replace(temp_path, path)
+    except Exception:
+        if temp_path is not None:
+            try:
+                temp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        raise
 
 
 def get_room_dir(room_id):
@@ -45,15 +77,13 @@ def load_current_schedule(room_id):
 
 def save_current_schedule(room_id, data):
     path = get_current_schedule_path(room_id)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+    atomic_write_json(path, data)
 
 
 def save_changes(room_id, date, added, removed):
     time_str = datetime.now().strftime("%H_%M_%S")
     path = get_changes_path(room_id, date, time_str)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump({"added": added, "removed": removed}, f, ensure_ascii=False, indent=4)
+    atomic_write_json(path, {"added": added, "removed": removed})
 
 
 def get_snapshot_schedule_path(room_id):
@@ -72,8 +102,7 @@ def load_snapshot_schedule(room_id):
 
 def save_snapshot_schedule(room_id, data):
     path = get_snapshot_schedule_path(room_id)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+    atomic_write_json(path, data)
 
 
 def get_calendar_missing_path(room_id):
@@ -90,12 +119,12 @@ def load_calendar_missing(room_id):
 
 def save_calendar_missing(room_id, data):
     path = get_calendar_missing_path(room_id)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+    atomic_write_json(path, data)
 
 
 def get_failed_messages_path():
     return MESSAGES_DIR / "failed_messages.json"
+
 
 def load_failed_messages():
     path = get_failed_messages_path()
@@ -104,7 +133,7 @@ def load_failed_messages():
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
+
 def save_failed_messages(messages):
     path = get_failed_messages_path()
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(messages, f, ensure_ascii=False, indent=4)
+    atomic_write_json(path, messages)
