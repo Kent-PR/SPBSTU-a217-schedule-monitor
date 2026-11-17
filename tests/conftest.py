@@ -1,8 +1,12 @@
+import os
 import sys
 from types import ModuleType
 
 import pytest
 
+
+# Keep synthetic test errors out of the production service log.
+os.environ["SCHEDULE_MONITOR_DISABLE_FILE_LOGGING"] = "1"
 
 # Tests never use real Telegram credentials.
 credentials = ModuleType("tg_credentials")

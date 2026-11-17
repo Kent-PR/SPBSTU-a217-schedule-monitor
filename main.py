@@ -1,5 +1,6 @@
 import requests
 import logging
+import os
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -28,26 +29,39 @@ DATA_DIR.mkdir(exist_ok=True)
 # ================ LOGGING =================
 
 LOG_DIR = BASE_DIR / "logs"
-LOG_DIR.mkdir(exist_ok=True)
-
 LOG_FILE = "schedule_service.log"
+DISABLE_FILE_LOGGING_ENV = "SCHEDULE_MONITOR_DISABLE_FILE_LOGGING"
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-handler = RotatingFileHandler(
-    LOG_DIR / "schedule_service.log",
-    maxBytes=5 * 1024 * 1024,  # 5Mb
-    backupCount=3,
-    encoding="utf-8"
-)
 
-formatter = logging.Formatter(
-    "%(asctime)s - %(levelname)s - %(message)s"
-)
+def configure_file_logging():
+    if os.environ.get(DISABLE_FILE_LOGGING_ENV) == "1":
+        return
 
-handler.setFormatter(formatter)
-logger.addHandler(handler)
+    LOG_DIR.mkdir(exist_ok=True)
+    log_path = (LOG_DIR / LOG_FILE).resolve()
+    if any(
+        isinstance(existing, RotatingFileHandler)
+        and Path(existing.baseFilename).resolve() == log_path
+        for existing in logger.handlers
+    ):
+        return
+
+    handler = RotatingFileHandler(
+        log_path,
+        maxBytes=5 * 1024 * 1024,  # 5Mb
+        backupCount=3,
+        encoding="utf-8",
+    )
+    handler.setFormatter(
+        logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    )
+    logger.addHandler(handler)
+
+
+configure_file_logging()
 
 
 HEADERS = {
