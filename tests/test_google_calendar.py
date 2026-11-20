@@ -7,8 +7,10 @@ import google_calendar
 class FakeRequest:
     def __init__(self, response=None):
         self.response = response or {}
+        self.execute_calls = []
 
-    def execute(self):
+    def execute(self, **kwargs):
+        self.execute_calls.append(kwargs)
         return self.response
 
 
@@ -87,6 +89,17 @@ def managed_event(lesson, room_name="Room A.2.17", event_id="event-1"):
     event = google_calendar._event_body(lesson, room_name, "UTC")
     event["id"] = event_id
     return event
+
+
+def test_google_request_uses_transient_failure_retries():
+    request = FakeRequest({"items": []})
+
+    response = google_calendar._execute(request)
+
+    assert response == {"items": []}
+    assert request.execute_calls == [
+        {"num_retries": google_calendar.GOOGLE_API_NUM_RETRIES}
+    ]
 
 
 def test_disabled_sync_does_not_build_google_service(monkeypatch, lesson):

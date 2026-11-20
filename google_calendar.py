@@ -11,10 +11,16 @@ from constants import END_DATE, GOOGLE_CALENDAR, START_DATE
 BASE_DIR = Path(__file__).resolve().parent
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
 SOURCE_MARKER = "ruz_hack"
+GOOGLE_API_NUM_RETRIES = 3
 
 
 class GoogleCalendarConfigError(RuntimeError):
     pass
+
+
+def _execute(request):
+    """Execute a Google API request with retries for transient failures."""
+    return request.execute(num_retries=GOOGLE_API_NUM_RETRIES)
 
 
 def _lesson_key(lesson):
@@ -140,7 +146,7 @@ def _list_events(service, calendar_id, timezone, today):
     events = []
     page_token = None
     while True:
-        response = (
+        response = _execute(
             service.events()
             .list(
                 calendarId=calendar_id,
@@ -150,7 +156,6 @@ def _list_events(service, calendar_id, timezone, today):
                 showDeleted=False,
                 pageToken=page_token,
             )
-            .execute()
         )
         events.extend(response.get("items", []))
         page_token = response.get("nextPageToken")
@@ -163,7 +168,7 @@ def _list_managed_events(service, calendar_id, room_id, timezone):
     events = []
     page_token = None
     while True:
-        response = (
+        response = _execute(
             service.events()
             .list(
                 calendarId=calendar_id,
@@ -174,7 +179,6 @@ def _list_managed_events(service, calendar_id, room_id, timezone):
                 privateExtendedProperty=f"ruzSource={SOURCE_MARKER}",
                 pageToken=page_token,
             )
-            .execute()
         )
         for event in response.get("items", []):
             private = event.get("extendedProperties", {}).get("private", {})
@@ -225,30 +229,34 @@ def sync_synchronized_calendar(
 
     stats = {"created": 0, "updated": 0, "deleted": 0, "disabled": False}
     for event_id in duplicate_ids:
-        service.events().delete(calendarId=calendar_id, eventId=event_id).execute()
+        _execute(service.events().delete(calendarId=calendar_id, eventId=event_id))
         stats["deleted"] += 1
 
     for key, body in desired.items():
         event = existing.pop(key, None)
         if event is None:
-            service.events().insert(calendarId=calendar_id, body=body).execute()
+            _execute(service.events().insert(calendarId=calendar_id, body=body))
             stats["created"] += 1
             continue
 
         current_private = event.get("extendedProperties", {}).get("private", {})
         wanted_private = body["extendedProperties"]["private"]
         if current_private.get("ruzFingerprint") != wanted_private["ruzFingerprint"]:
-            service.events().update(
-                calendarId=calendar_id,
-                eventId=event["id"],
-                body=body,
-            ).execute()
+            _execute(
+                service.events().update(
+                    calendarId=calendar_id,
+                    eventId=event["id"],
+                    body=body,
+                )
+            )
             stats["updated"] += 1
 
     for event in existing.values():
-        service.events().delete(
-            calendarId=calendar_id, eventId=event["id"]
-        ).execute()
+        _execute(
+            service.events().delete(
+                calendarId=calendar_id, eventId=event["id"]
+            )
+        )
         stats["deleted"] += 1
 
     logging.info(
