@@ -1,9 +1,13 @@
 import hashlib
 import json
 import logging
+import socket
+import ssl
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from httplib2.error import ServerNotFoundError
 
 from constants import END_DATE, GOOGLE_CALENDAR, START_DATE
 
@@ -16,6 +20,34 @@ GOOGLE_API_NUM_RETRIES = 3
 
 class GoogleCalendarConfigError(RuntimeError):
     pass
+
+
+def is_transient_google_error(error):
+    """Return whether an exception chain represents a temporary API failure."""
+    seen = set()
+    current = error
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(
+            current,
+            (
+                ServerNotFoundError,
+                socket.gaierror,
+                socket.timeout,
+                TimeoutError,
+                ConnectionError,
+                ssl.SSLError,
+            ),
+        ):
+            return True
+
+        status = getattr(getattr(current, "resp", None), "status", None)
+        if status == 429 or isinstance(status, int) and status >= 500:
+            return True
+
+        current = current.__cause__ or current.__context__
+
+    return False
 
 
 def _execute(request):
