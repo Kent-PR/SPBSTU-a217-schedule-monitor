@@ -6,7 +6,7 @@
     },
     "semester": {
         "start_date": "2026-09-01",
-        "end_date": "2027-01-31"
+        "end_date": "2027-02-01"
     },
     "check_interval_seconds": 600,
     "outage_alert_threshold": 3,
