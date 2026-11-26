@@ -179,6 +179,7 @@ python Scripts/pywin32_postinstall.py -install
 ```python
 TG_TOKEN = "твой_токен"
 TG_CHAT_ID = "твой_chat_id"
+TG_EXTRA_CHAT_IDS = ["chat_id_второго", "chat_id_третьего"]  # необязательно
 TG_PROXY = "http://адрес_vps:порт"  # резервный прокси на случай недоступности Telegram
 ```
 
