@@ -9,6 +9,8 @@ from storage import load_current_schedule, save_current_schedule, save_changes, 
     save_snapshot_schedule, load_failed_messages, save_failed_messages, load_calendar_missing,\
     save_calendar_missing, load_availability_state, save_availability_state
 from telegram_notifier import (
+    CHAT_ID,
+    CHAT_IDS,
     prepare_retry_parts,
     send_telegram,
     send_telegram_detailed,
@@ -409,12 +411,24 @@ def audit_google_calendar(room_id, room_name, schedule, today):
 
 
 def send_or_queue(message):
-    result = send_telegram_detailed(message)
-    if result.status is False:
+    pending = []
+    status = True
+    for chat_id in CHAT_IDS:
+        result = send_telegram_detailed(message, chat_id=chat_id)
+        if result.status is False:
+            status = False
+            pending.extend(
+                {"chat_id": chat_id, "text": part}
+                for part in prepare_retry_parts(result.remaining_parts)
+            )
+        elif result.status is None and status is True:
+            status = None
+
+    if pending:
         queue = load_failed_messages()
-        queue.extend(prepare_retry_parts(result.remaining_parts))
+        queue.extend(pending)
         save_failed_messages(queue)
-    return result.status
+    return status
 
 
 def retry_failed_messages():
@@ -423,13 +437,21 @@ def retry_failed_messages():
         return
 
     still_failed = []
-    pending_parts = prepare_retry_parts(
-        message for message in queue if isinstance(message, str)
-    )
-    for msg in pending_parts:
-        stamped_msg = msg + f"\n\nОтправлено с задержкой: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
-        if send_telegram(stamped_msg) is False:
-            still_failed.append(msg)
+    stamp = f"\n\nОтправлено с задержкой: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+    for entry in queue:
+        if isinstance(entry, str):
+            # Старые записи очереди предназначались основному получателю.
+            chat_id, message = str(CHAT_ID).strip(), entry
+        elif isinstance(entry, dict):
+            chat_id, message = entry.get("chat_id"), entry.get("text")
+        else:
+            continue
+        if chat_id not in CHAT_IDS or not isinstance(message, str):
+            continue
+
+        for part in prepare_retry_parts((message,)):
+            if send_telegram(part + stamp, chat_id=chat_id) is False:
+                still_failed.append({"chat_id": chat_id, "text": part})
 
     save_failed_messages(still_failed)
 

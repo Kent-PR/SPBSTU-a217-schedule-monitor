@@ -3,10 +3,15 @@ import logging
 import time
 from dataclasses import dataclass
 from html import escape
+from private_config import tg_credentials
 from private_config.tg_credentials import TG_TOKEN, TG_CHAT_ID, TG_PROXY
 
 TOKEN = TG_TOKEN
 CHAT_ID = TG_CHAT_ID
+CHAT_IDS = tuple(dict.fromkeys(
+    str(chat_id).strip()
+    for chat_id in (CHAT_ID, *getattr(tg_credentials, "TG_EXTRA_CHAT_IDS", ()))
+))
 
 PROXIES = {
     "http": TG_PROXY,
@@ -50,9 +55,9 @@ def _safe_error(error):
     return str(error).replace(TOKEN, "***")
 
 
-def _send_chunk(text: str, retries, delay):
+def _send_chunk(text: str, retries, delay, chat_id):
     payload = {
-        "chat_id": CHAT_ID,
+        "chat_id": chat_id,
         "text": escape(text, quote=False),
         "parse_mode": "HTML"
     }
@@ -66,7 +71,7 @@ def _send_chunk(text: str, retries, delay):
                 proxies=PROXIES,
             )
             response.raise_for_status()
-            logging.info("Telegram notification sent successfully via proxy")
+            logging.info("Telegram notification sent successfully via proxy to chat %s", chat_id)
             return True
         except requests.RequestException as e:
             if e.response is not None and e.response.status_code == 400:
@@ -92,10 +97,10 @@ def _send_chunk(text: str, retries, delay):
         logging.info("Telegram notification sent successfully directly")
         return True
     except requests.RequestException as e:
-        if e.response is not None and e.response.status_code == 400:
+        if e.response is not None and e.response.status_code in (400, 403):
             logging.error(
-                "Telegram rejected the message with HTTP 400 directly; "
-                "the request will not be retried"
+                "Telegram rejected the message to chat %s with HTTP %s directly; "
+                "the request will not be retried", chat_id, e.response.status_code
             )
             return None
 
@@ -106,24 +111,25 @@ def _send_chunk(text: str, retries, delay):
         return False
 
 
-def send_telegram_detailed(text: str, retries=3, delay=30):
+def send_telegram_detailed(text: str, retries=3, delay=30, *, chat_id=CHAT_ID):
     chunks = split_message(text)
 
     for index, chunk in enumerate(chunks, start=1):
-        result = _send_chunk(chunk, retries, delay)
+        result = _send_chunk(chunk, retries, delay, chat_id)
         if result is not True:
             logging.error(
-                "Telegram notification part %s/%s failed",
+                "Telegram notification part %s/%s failed for chat %s",
                 index,
                 len(chunks),
+                chat_id,
             )
             return TelegramSendResult(result, tuple(chunks[index - 1:]))
 
     return TelegramSendResult(True, ())
 
 
-def send_telegram(text: str, retries=3, delay=30):
-    return send_telegram_detailed(text, retries, delay).status
+def send_telegram(text: str, retries=3, delay=30, *, chat_id=CHAT_ID):
+    return send_telegram_detailed(text, retries, delay, chat_id=chat_id).status
 
 
 def prepare_retry_parts(parts):

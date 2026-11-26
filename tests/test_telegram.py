@@ -94,12 +94,23 @@ def test_detailed_result_contains_only_unsent_and_later_parts(monkeypatch):
 def test_send_or_queue_saves_only_unsent_parts(monkeypatch):
     result = notifier.TelegramSendResult(False, ("b" * 4000, "c"))
     save = Mock()
-    monkeypatch.setattr(main, "send_telegram_detailed", Mock(return_value=result))
+    success = notifier.TelegramSendResult(True, ())
+    send = Mock(side_effect=[success, result, success])
+    monkeypatch.setattr(main, "CHAT_IDS", ("test-chat", "extra-1", "extra-2"))
+    monkeypatch.setattr(main, "send_telegram_detailed", send)
     monkeypatch.setattr(main, "load_failed_messages", Mock(return_value=["existing"]))
     monkeypatch.setattr(main, "save_failed_messages", save)
 
     assert main.send_or_queue("original") is False
-    save.assert_called_once_with(["existing", "b" * 3800, "b" * 200, "c"])
+    assert [call.kwargs["chat_id"] for call in send.call_args_list] == [
+        "test-chat", "extra-1", "extra-2",
+    ]
+    save.assert_called_once_with([
+        "existing",
+        {"chat_id": "extra-1", "text": "b" * 3800},
+        {"chat_id": "extra-1", "text": "b" * 200},
+        {"chat_id": "extra-1", "text": "c"},
+    ])
 
 
 def test_legacy_long_queue_is_split_before_retry(monkeypatch):
@@ -112,14 +123,14 @@ def test_legacy_long_queue_is_split_before_retry(monkeypatch):
     main.retry_failed_messages()
 
     queued_again = save.call_args.args[0]
-    assert [len(part) for part in queued_again] == [3800, 3800, 401]
-    assert send.call_count == 3
+    assert [len(entry["text"]) for entry in queued_again] == [3800, 3800, 401]
+    assert [call.kwargs["chat_id"] for call in send.call_args_list] == ["test-chat"] * 3
 
 
 @pytest.mark.parametrize(
     ("send_result", "expected_queue"),
     [
-        (False, ["queued message"]),
+        (False, [{"chat_id": "extra-1", "text": "queued message"}]),
         (None, []),
         (True, []),
     ],
@@ -128,11 +139,14 @@ def test_retry_queue_keeps_only_temporary_failures(
     monkeypatch, send_result, expected_queue
 ):
     save = Mock()
-    monkeypatch.setattr(main, "load_failed_messages", Mock(return_value=["queued message"]))
+    entry = {"chat_id": "extra-1", "text": "queued message"}
+    monkeypatch.setattr(main, "CHAT_IDS", ("test-chat", "extra-1"))
+    monkeypatch.setattr(main, "load_failed_messages", Mock(return_value=[entry]))
     monkeypatch.setattr(main, "save_failed_messages", save)
     monkeypatch.setattr(main, "send_telegram", Mock(return_value=send_result))
 
     main.retry_failed_messages()
 
     save.assert_called_once_with(expected_queue)
+    assert main.send_telegram.call_args.kwargs["chat_id"] == "extra-1"
 
